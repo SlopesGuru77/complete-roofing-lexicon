@@ -1,0 +1,39 @@
+# Secrets — NEVER commit. Manager enters Supabase URL + anon key
+# at runtime via the in-app Sync Settings panel; they live in localStorage,
+# not in source.
+.env
+.env.*
+*.env
+.envrc
+secrets.json
+credentials.json
+*.pem
+*.key
+*-key.json
+service-account*.json
+.supabase
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.vscode/
+.idea/
+*.bak
+*.tmp
+
+# Logs
+*.log
+
+# Local dev artifacts
+probe.js
+.playwright-mcp/
+
+# Wave / handoff backups (keep the live files, drop dated backups)
+*.bak.md
+
+# Source / reference material (informed term scope; not for the public repo)
+Building Owners Guide to Commercial Roofing/
+*.pdf
+

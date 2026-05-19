@@ -1,0 +1,52 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Read this first
+
+`CLAUDE_CODE_HANDOFF.md` is the authoritative spec for the original v2 — content rules, brand system, and the §7 structural fork. `WAVE-NOTES-2026-05-18.md` documents the v3 upgrade ("The Complete Roofing Lexicon"). Read both before editing.
+
+## What this repo is
+
+A single-file static web app: a branded training + certification platform ("The Complete Roofing Lexicon") for Justen Newton Media — covering commercial, residential, hail forensics (dedicated module with threshold reference + 9-step test-cut protocol), insurance restoration, claims vocabulary, plain-English translation drills, pro-grade report-language coaching, and role-based recommended curricula. Everything — HTML, CSS, all JS, all data — lives in `index.html` (~2,150 lines). No package manager, no build, no backend, no tests.
+
+The app has three certification levels: L1 Apprentice (80%, tier-1 vocab, 16 Q), L2 Field Roofing Professional (85%, tier 1–2, 20 Q), L3 Claims & Forensics Specialist (90%, all tiers including forensic, 22 Q). When a user sets a role in Profile, the Overview shows a 5-step recommended path tuned to that role with deep-links into the right module + pre-filter.
+
+Deployment: GitHub push → Zeabur auto-detects as a static site and redeploys `index.html` at the placeholder domain `lexicon.justennewton.media`. External runtime deps: Google Fonts and `qrious` from cdnjs (both have graceful fallbacks); Plausible analytics is wired in `<head>`.
+
+## How to run / iterate
+
+- **Preview:** open `index.html` directly in a browser, or `python -m http.server 8000` from the repo root and visit `localhost:8000`. There is no dev server, no hot reload, no linter, no test suite.
+- **Deploy:** `git push`. Zeabur handles the rest. No Dockerfile, no config file.
+- **No build step exists. Do not add one** (see hard rule §3.2 in the handoff).
+
+## Architecture inside `index.html`
+
+Single `<script>` block, ordered:
+
+1. **Data**: `CATS` (17 category groups), `TIER_NAME` (1=Apprentice, 2=Journeyman, 3=Forensic), `TERMS` (~223, shape `{t, c, tier, d, n?, vf?, see?}` — `t` is the unique key), `SCENARIOS` (16), `COMPAT` (26), `PLAIN_ENGLISH` (41-entry dictionary keyed by term name, shape `{pe, nts}`), `REPORT_PAIRS` (20-entry array, shape `{topic, rel, poor, better, best, why}`), `LEVELS` (3-entry config for L1/L2/L3 certifications), `HAIL_THRESHOLDS` (11-row reference table), `TEST_CUT_STEPS` (9-step protocol checklist), `CURRICULA` (role→5-step path map for 12 roles). Anchor on the `/* ===== Residential & Steep-Slope ===== */`, `/* ===== Hail Forensics — reference data ===== */`, `/* ===== Building-Owner Translation Mode ===== */`, etc. block comments when locating sections.
+2. **Engine**: `Store` (localStorage wrapper with in-memory fallback; state key `crl_v2_state` — kept on v2 even though `state.v=3`, so existing users' progress survives), `defState()` (now includes `role, location, prefs:{dark,passcode}, mgrUnlocked`), `loadState`/`saveState` (deep-merges `prefs` for forward compatibility), `applyTheme()` (toggles `html.dark`), `state`, `RENDER` map, `track(n)` Plausible helper, `VIEWS` nav array, `renderNav`, `go(v)`.
+3. **Modules** (13 tabs in `VIEWS`): `RENDER.overview` (renders the role-based curriculum panel when `state.role` is set), `RENDER.lexicon` (+ `drawLex`, `termCard`), `RENDER.flash` (Leitner SRS), `RENDER.quiz` (4 modes incl. Speed Round; bumps `state.cards[t].missed/seen` per answer), `RENDER.scenarios`, `RENDER.compat`, `RENDER.hail` (wave 3 — threshold table + interactive 9-step protocol + 4 practice deep-link cards), `RENDER.owner` (wave 2 — Plain-English drill with reveal + don't-say-this), `RENDER.report` (wave 2 — poor/better/best step-reveal with filter chips), `RENDER.certify` (wave 2 refactor — 3-level picker, `buildCert(level)`, level-aware certificate, `refNo` → JNM-CRL-XXXXXX IDs), `RENDER.profile`, `RENDER.manager` (passcode-gated, default `ROOF123`, exports CSV/JSON, cert table has Level column), `RENDER.about` (QR via qrious).
+
+Curriculum dispatcher is `runCurriculumAction(a)`. Action shorthand: `lexicon`/`certify`/etc. (bare view), `lex:hailforensics` (Lexicon + pre-filtered to group), `rep:claims` (Report Lang + filter), `flash:t:1` (Flashcards + Apprentice-tier deck).
+4. **Init** at file end.
+
+When adding a module: register it in `VIEWS`, add a `<section id="…" class="view">` in the body, add a `RENDER.<key>` function, and fire a `track("…")` event for any meaningful completion so Justen can wire it to a Plausible goal.
+
+Per-card schema is `{box, seen, missed, last}` (Leitner: box 0–5, mastered at ≥5). Both flashcards (`fcMark`) and quizzes write to it. The Manager's "most-missed" table reads `.missed`/`.seen`.
+
+## Editing rules (non-obvious, easy to break)
+
+- **Edit in place. Never rewrite the file wholesale** — past full-file rewrites truncated. Use targeted `Edit` calls.
+- **Originality is a legal requirement.** Term scope was *informed by* Brian Lemke's Building Owners Guide, plus NRCA/ASTM. Every definition was written independently and must stay that way. Credit Lemke / NRCA / ASTM as references in About + footer; never copy or closely paraphrase source text. See handoff §3.1.
+- **Verify dated facts before writing definitions.** Source material is years old (e.g., "Firestone Building Products" is now Elevate/Holcim; ASTM specs get revised). Use the existing `vf` "Verify Current Spec" flag on time-sensitive terms.
+- **Storage compatibility.** `Store` must keep its in-memory fallback so the app runs in sandboxed previews where localStorage throws. If you change the `state` shape, bump a version in the key or migrate on load.
+- **Placeholders to replace before launch:** `lexicon.justennewton.media` in `<head>` meta tags and Plausible `data-domain`; `og-cover.png` (1200×630) does not exist yet and must be created in repo root.
+
+## Brand / voice (when generating UI or copy)
+
+Editorial-forensic, not salesy. Fonts: Playfair Display, Cormorant Garamond, JetBrains Mono, Inter. Palette: ink `#0a0a0a`, newsprint `#f5f1e8`, paper-dark `#ebe5d3`, paper-line `#d4cdb7`, card `#fbf8ef`, redline `#b91c1c`, footnote gray `#475569`, citation gold `#92400e`, good-green `#1f5d3a`. JN monogram seal is pure CSS (`.seal` classes) — no image asset. Definitions: 1–2 sentences. Use **Field Notes** (`n`) for practitioner insight. Full brand system in handoff §9.
+
+## Pending work
+
+The handoff §5 (EPDM deep-dive) and §6 (Hail Forensics) describe the next content drops. §7 is a structural decision (sections vs. levels vs. phases) that **requires owner confirmation before building** — do not pick unilaterally. Task order is in handoff §8.
