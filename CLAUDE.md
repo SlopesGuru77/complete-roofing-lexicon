@@ -47,6 +47,26 @@ Per-card schema is `{box, seen, missed, last}` (Leitner: box 0–5, mastered at 
 
 Editorial-forensic, not salesy. Fonts: Playfair Display, Cormorant Garamond, JetBrains Mono, Inter. Palette: ink `#0a0a0a`, newsprint `#f5f1e8`, paper-dark `#ebe5d3`, paper-line `#d4cdb7`, card `#fbf8ef`, redline `#b91c1c`, footnote gray `#475569`, citation gold `#92400e`, good-green `#1f5d3a`. JN monogram seal is pure CSS (`.seal` classes) — no image asset. Definitions: 1–2 sentences. Use **Field Notes** (`n`) for practitioner insight. Full brand system in handoff §9.
 
-## Pending work
+## Zeabur Deployment (active, v3)
 
-The handoff §5 (EPDM deep-dive) and §6 (Hail Forensics) describe the next content drops. §7 is a structural decision (sections vs. levels vs. phases) that **requires owner confirmation before building** — do not pick unilaterally. Task order is in handoff §8.
+- **Project ID:** `6a0bec24c08ad7fb8a7dbb3a`
+- **Project name:** `complete-roofing-lexicon`
+- **Service ID:** `6a0bec48c08ad7fb8a7dbb40` — pass `--service-id` on every subsequent deploy to update in place (omitting it creates a duplicate service)
+- **Server:** `server-69c6266d726b928734624537` (Hetzner 007Server)
+- **GitHub repo:** `SlopesGuru77/complete-roofing-lexicon` (public)
+- **GitHub repo numeric ID:** `1243057448`
+- **Deploy template:** GIT — Zeabur auto-redeploys on every push to `main`.
+- **Dashboard:** https://zeabur.com/projects/6a0bec24c08ad7fb8a7dbb3a
+
+To check build/runtime logs use the `zeabur-deployment-logs` skill. To redeploy via CLI (rarely needed since Git-deploy auto-redeploys on push):
+
+```bash
+npx zeabur@latest deploy --project-id 6a0bec24c08ad7fb8a7dbb3a --service-id 6a0bec48c08ad7fb8a7dbb40 --json
+```
+
+## Pending post-deploy work
+
+1. Bind real custom subdomain on Zeabur (`lexicon.justennewton.media` or whichever — owner decision).
+2. Run `supabase-setup.sql` in self-hosted Supabase, then enter URL + anon key in deployed app → Manager → Sync Settings.
+3. Create and commit `og-cover.png` (1200×630) to fix social previews.
+4. Re-enable the commented-out `<link rel="canonical">` and `<meta property="og:url">` in `index.html` once the real domain is bound.

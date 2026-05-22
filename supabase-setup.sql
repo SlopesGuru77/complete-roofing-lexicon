@@ -58,13 +58,25 @@ create index if not exists idx_rtcert_staff on roofing_training_certifications (
 create index if not exists idx_rtcert_created on roofing_training_certifications (created_at desc);
 create index if not exists idx_rtcert_level on roofing_training_certifications (level);
 
--- Optional: enable RLS (recommended for shared instances)
--- alter table roofing_training_staff enable row level security;
--- alter table roofing_training_progress enable row level security;
--- alter table roofing_training_certifications enable row level security;
+-- RLS + anon insert policies (deployed 2026-05-19)
+alter table roofing_training_staff enable row level security;
+alter table roofing_training_progress enable row level security;
+alter table roofing_training_certifications enable row level security;
 
--- Optional: allow anon inserts (matches the app's anon-key writes)
--- create policy "anon can insert progress" on roofing_training_progress
---   for insert to anon with check (true);
--- create policy "anon can insert certs" on roofing_training_certifications
---   for insert to anon with check (true);
+drop policy if exists "anon can insert progress" on roofing_training_progress;
+create policy "anon can insert progress" on roofing_training_progress
+  for insert to anon with check (true);
+
+drop policy if exists "anon can insert certs" on roofing_training_certifications;
+create policy "anon can insert certs" on roofing_training_certifications
+  for insert to anon with check (true);
+
+-- Note on RLS + RETURNING (PostgreSQL footgun): if a client uses
+-- `Prefer: return=representation` (or supabase-js `.insert(row).select()`),
+-- Postgres ALSO needs a SELECT policy to read the new row back, or it
+-- throws the misleading "new row violates row-level security policy" error.
+-- The Lexicon's writes are fire-and-forget (`.insert(row)` with no `.select()`)
+-- which sends `Prefer: return=minimal`, so NO public SELECT policy is needed
+-- and SELECT remains restricted to authenticated/admin queries.
+-- If you later change the app to chain `.select()` after `.insert()`, you
+-- will need to add a permissive SELECT policy here.

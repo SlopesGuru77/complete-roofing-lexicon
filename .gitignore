@@ -29,6 +29,8 @@ Thumbs.db
 # Local dev artifacts
 probe.js
 .playwright-mcp/
+.superpowers/
+_staging/
 
 # Wave / handoff backups (keep the live files, drop dated backups)
 *.bak.md

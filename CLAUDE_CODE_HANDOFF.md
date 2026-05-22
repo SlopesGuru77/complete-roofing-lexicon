@@ -2,10 +2,65 @@
 
 **Project:** The Complete Roofing Lexicon (formerly "The Commercial Roofing Lexicon" v1/v2) — a single-file, static web app.
 **Owner:** Justen Newton / Justen Newton Media (justennewton.media)
-**Current version:** v3 (waves 1–3, completed 2026-05-18)
+**Current version:** v3.1 (waves 1–3.1, completed 2026-05-18 / 2026-05-19)
 **Authoritative wave-by-wave details:** `WAVE-NOTES-2026-05-18.md`
+**Production URL:** https://complete-roofing-lexicon.zeabur.app/ (live, auto-redeploys on push to `main`)
 
 > **First action for a new session:** read this file end-to-end, then `WAVE-NOTES-2026-05-18.md` for wave specifics, then `index.html` itself before changing anything. Confirm any structural change with Justen before building.
+
+---
+
+## 0. Deployment status snapshot (2026-05-19)
+
+| Item | Status | Detail |
+|---|---|---|
+| GitHub repo | ✅ Live | https://github.com/SlopesGuru77/complete-roofing-lexicon (public, `main`, initial commit `af170b8`) |
+| Local git repo | ✅ Initialized | `.git/` lives in this folder; orphan-home-dir repo no longer in scope here. `git rev-parse --git-dir` returns `.git`. |
+| Zeabur project | ✅ Created | `complete-roofing-lexicon` — ID `6a0bec24c08ad7fb8a7dbb3a`, Hetzner 007Server |
+| Zeabur service | ✅ Deployed | ID `6a0bec48c08ad7fb8a7dbb40`, Git-template, auto-redeploys on `main` push, static-site detected, ~15s build |
+| Public domain | ✅ Bound | `complete-roofing-lexicon.zeabur.app` (Zeabur-generated). Real custom subdomain still pending owner decision. |
+| Custom domain (`lexicon.justennewton.media` etc.) | ⏳ Pending | Owner decision. Once bound: re-enable the commented-out `<link rel="canonical">` and `<meta property="og:url">` in `index.html`. |
+| `og-cover.png` | ⏳ Pending | Still missing; social previews render broken card. |
+| Self-hosted Supabase service | ⏳ In progress (2026-05-19) | Owner standing up Supabase on Zeabur at `rkasupabase.zeabur.app`. Internal Postgres env vars (`POSTGRES_PASSWORD`, `PGDATABASE`, etc.) resolved from `${VAR}` placeholders to literals; pending service restart and confirmation it boots clean. |
+| `supabase-setup.sql` executed | ⏳ Pending | Run after Supabase service is green. |
+| In-app Sync Settings configured (URL + ANON_KEY) | ⏳ Pending | Enter via Manager → Sync Settings on a manager device after the SQL setup. |
+| Plausible | ⏳ Inert until custom domain | Script loads but events filter on `data-domain="lexicon.justennewton.media"`, so events from the `.zeabur.app` host won't register until either the placeholder is swapped or the real domain is bound. |
+
+### Active CLI handles (save these — used for redeploy and logs)
+
+```text
+GitHub repo:        SlopesGuru77/complete-roofing-lexicon
+GitHub numeric ID:  1243057448
+Zeabur project ID:  6a0bec24c08ad7fb8a7dbb3a
+Zeabur service ID:  6a0bec48c08ad7fb8a7dbb40
+Zeabur server:      server-69c6266d726b928734624537 (Hetzner 007Server)
+Supabase service:   rkasupabase.zeabur.app (separate Zeabur project)
+Storage key:        crl_v2_state (do not change; kept on v2 for forward-compat)
+```
+
+To redeploy via CLI (rarely needed since Git push auto-redeploys):
+```bash
+npx zeabur@latest deploy --project-id 6a0bec24c08ad7fb8a7dbb3a --service-id 6a0bec48c08ad7fb8a7dbb40 --json
+```
+
+### What "deploy" means right now
+
+1. ✅ Make local changes to `index.html` (or docs).
+2. ✅ Commit on `main` and push to GitHub.
+3. ✅ Zeabur picks up the push within seconds, builds (~15s), serves the new file at the public URL. No manual CLI step needed.
+
+### Operator one-time tasks remaining (in order)
+
+1. Finish standing up the self-hosted Supabase service at `rkasupabase.zeabur.app` (in flight 2026-05-19; internal Postgres env vars resolved, restart pending).
+2. Set / confirm Studio dashboard login (`DASHBOARD_USERNAME` + `DASHBOARD_PASSWORD`) — `RoofKing100` was set; password env var separate from `POSTGRES_PASSWORD`.
+3. Locate `ANON_KEY` (or `SUPABASE_ANON_KEY`) and `API_EXTERNAL_URL` env vars in the Zeabur Variables tab for the Supabase service.
+4. Open Supabase Studio → SQL Editor → paste contents of `supabase-setup.sql` → run.
+5. (Recommended) Enable RLS on the three tables; add an `insert` policy for the `anon` role on `roofing_training_progress` and `roofing_training_certifications` (the only writes the app makes).
+6. Open the deployed Lexicon → Manager (passcode `ROOF123`) → Sync Settings → paste URL + ANON_KEY → Test → Save → Enable.
+7. Run one cert; confirm a row lands in `roofing_training_certifications`.
+8. Decide on the real custom subdomain → bind on Zeabur → uncomment the canonical/og:url tags in `index.html` → push.
+9. Create `og-cover.png` (1200×630, editorial-forensic style per §10) → drop at repo root → push.
+10. **Rotate the Postgres `PASSWORD` env var** — the value was pasted in our chat session on 2026-05-19 while resolving placeholders, and JWTs derived from `JWT_SECRET` should be regenerated alongside if you go that route.
 
 ---
 
@@ -48,14 +103,14 @@ It is **one file** — `index.html` (~2,150 lines) — with all HTML, CSS, JavaS
 
 ### Deployment steps (sequence to launch)
 
-1. `git init` inside this project folder. (Currently the folder has no `.git/` and git commands resolve to a broken orphan repo in `C:\Users\roofk\` — see §3 hazard note.)
-2. `git add` only the intended files (`index.html`, the four docs, `supabase-setup.sql`, `.gitignore`). Never `git add .` from this directory without confirming what would be staged.
-3. `git commit` with a descriptive message; user info already set as `justennewton`.
-4. Create / point at the GitHub repo on `SlopesGuru77`. Add as `origin`. Push `main`.
-5. In Zeabur: New Service → from GitHub → select this repo → static-site auto-detection should pick `index.html`. Confirm port / public root.
-6. Bind the custom domain (whatever the real subdomain is).
-7. In the deployed app: open **Manager**, enter passcode, open **Sync Settings**, paste the self-hosted Supabase URL + anon key, click Test → Save. Confirm a write lands in `roofing_training_progress` from a test cert.
-8. Replace placeholder `og-cover.png` and the placeholder domain in `<head>` + Plausible `data-domain`; redeploy.
+1. ✅ **Done 2026-05-19.** `git init` inside this project folder. (Project-local `.git/` now owns the worktree; orphan-home-dir repo no longer in scope.)
+2. ✅ **Done 2026-05-19.** Stage only the intended files (`index.html`, the docs, `supabase-setup.sql`, `.gitignore`). Never `git add .` from this directory without checking — `Building Owners Guide to Commercial Roofing/` and any `*.pdf` are in `.gitignore` precisely for this reason.
+3. ✅ **Done 2026-05-19.** `git commit` (commit `af170b8`).
+4. ✅ **Done 2026-05-19.** GitHub repo `SlopesGuru77/complete-roofing-lexicon` created (public) and `main` pushed.
+5. ✅ **Done 2026-05-19.** Zeabur project `complete-roofing-lexicon` created, Git-template service deployed, static-site auto-detected. Auto-redeploys on every `main` push.
+6. ⏳ **Generated domain bound:** `complete-roofing-lexicon.zeabur.app`. Real custom subdomain still pending owner decision.
+7. ⏳ **Pending.** In the deployed app: open **Manager**, enter passcode `ROOF123`, expand **Sync Settings**, paste the self-hosted Supabase URL + anon key, click Test → Save → Enable. Confirm a write lands in `roofing_training_certifications` from one test cert.
+8. ⏳ **Pending.** Replace placeholder `og-cover.png` and the placeholder domain in `<head>` + Plausible `data-domain` (and uncomment the canonical/og:url tags); push — Zeabur redeploys automatically.
 
 ---
 
@@ -262,11 +317,20 @@ Recommended RLS: enable RLS on each table, allow `insert` for anon users (since 
 
 ### 7c. Configuration steps for the operator (one-time)
 
-1. In self-hosted Supabase on Zeabur: open SQL editor, paste `supabase-setup.sql`, run.
-2. (Recommended) Enable RLS on all three tables; add an `insert` policy for the anon role.
-3. Copy the project URL and the anon (public) key.
-4. In the deployed app: open Manager → enter passcode → expand Sync Settings → paste URL + anon key → Test → Save → Enable.
-5. Do one cert run on the same device; confirm a row appears in `roofing_training_certifications`.
+**Concrete handles as of 2026-05-19:**
+- Self-hosted Supabase service is being stood up at **`rkasupabase.zeabur.app`** (separate Zeabur project from the Lexicon's `complete-roofing-lexicon` project).
+- Studio dashboard login: `DASHBOARD_USERNAME=RoofKing100`. The `DASHBOARD_PASSWORD` is a separate env var (not the Postgres `PASSWORD`).
+- Internal Postgres env vars (`POSTGRES_PASSWORD`, `PGDATABASE`, `DATABASE_HOST`, etc.) were resolved from `${VAR}` placeholders to literal values on 2026-05-19; the service was restarted after that.
+
+Then:
+
+1. Open https://rkasupabase.zeabur.app/ → log in to Studio (`RoofKing100` + `DASHBOARD_PASSWORD`).
+2. SQL Editor → paste contents of `supabase-setup.sql` → Run. Three tables + indexes are created.
+3. (Recommended) Enable RLS on all three tables; add an `insert` policy for the `anon` role on `roofing_training_progress` and `roofing_training_certifications`. The commented-out policy blocks at the bottom of `supabase-setup.sql` can be uncommented and run.
+4. In the Zeabur Variables tab for the Supabase service: locate `ANON_KEY` (or `SUPABASE_ANON_KEY` — a long JWT starting `eyJ…`) and `API_EXTERNAL_URL` (likely `https://rkasupabase.zeabur.app`). **Use the ANON key, not the SERVICE_ROLE key** — the latter bypasses RLS and is admin-level.
+5. In the deployed Lexicon (`https://complete-roofing-lexicon.zeabur.app/`): open Manager → enter passcode `ROOF123` → expand Sync Settings → paste URL + ANON_KEY → keep prefix as `roofing_training_` → Save → Test → Enable.
+6. Do one cert run on the same device; confirm a row appears in `roofing_training_certifications`.
+7. **Rotate the Postgres `PASSWORD`** value in the Supabase service's Zeabur env vars — the literal value was pasted into a Claude Code chat on 2026-05-19. Regenerate JWTs (`ANON_KEY` / `SERVICE_ROLE_KEY`) if your self-hosted template re-derives them from `JWT_SECRET`.
 
 ### 7d. Out of scope (v3.1)
 
@@ -286,9 +350,10 @@ Concise pointer; full per-wave detail in `WAVE-NOTES-2026-05-18.md`.
 | **Wave 1** | 2026-05-18 | Rename to "The Complete Roofing Lexicon"; add 5 categories (Residential & Steep-Slope, Tile/Slate/Specialty, Ventilation, Hail Forensics, Insurance Restoration); +77 original terms; +5 scenarios; +9 compat items; new **Profile** tab (name/role/location/theme/export/import) and **Manager** tab (passcode `ROOF123`, group mastery, most-missed terms, cert history, CSV+JSON exports); dark mode; quiz handler bumps per-card `seen`/`missed`. |
 | **Wave 2** | 2026-05-18 | Three high-leverage additions. **Plain English** tab (41-entry dictionary of conversational translations + don't-say-this counter-examples). **Report Language** tab (20 documentation topics × poor/better/best with reasoning). **3-level certification** (L1 Apprentice 80% / L2 Field Roofing Professional 85% / L3 Claims & Forensics Specialist 90%) with level-named credentials. Manager cert table grew a Level column. |
 | **Wave 3** | 2026-05-18 | **Hail Forensics** dedicated tab (11-row threshold reference, interactive 9-step test-cut protocol checklist, 4 practice deep-link cards). **Role-based recommended curriculum** — when role is set in Profile, Overview shows a 5-step path tuned to that role with deep-link buttons (e.g., Inspector step 1 → Lexicon pre-filtered to Hail Forensics group). |
-| **Wave 3.1 (this update)** | 2026-05-18 | Optional **Supabase sync** wiring in Manager dashboard; `supabase-setup.sql`; `.gitignore`; deployment-ready for GitHub → Zeabur. |
+| **Wave 3.1** | 2026-05-18 | Optional **Supabase sync** wiring in Manager dashboard; `supabase-setup.sql`; `.gitignore`; deployment-ready for GitHub → Zeabur. |
+| **v3.1 deploy** | 2026-05-19 | Project-local `git init` + initial commit. GitHub repo `SlopesGuru77/complete-roofing-lexicon` created (public). Zeabur project + service created (Git template, auto-redeploys on push). Generated domain `complete-roofing-lexicon.zeabur.app` bound. Owner standing up self-hosted Supabase at `rkasupabase.zeabur.app` in parallel — internal Postgres env vars resolved from `${VAR}` placeholders to literals; restart + ANON_KEY discovery + in-app Sync Settings configuration are the next operator steps. |
 
-Each wave has been smoke-tested live in Chromium (Playwright) against a local Python http.server — zero console errors, all flows verified end-to-end.
+Each wave has been smoke-tested live in Chromium (Playwright) against a local Python http.server — zero console errors, all flows verified end-to-end. The deployed `https://complete-roofing-lexicon.zeabur.app/` has been confirmed serving 200 OK with a valid TLS chain in a real browser; title, all 13 tabs, Supabase library load, and `qrious` load all verified post-deploy.
 
 ---
 
@@ -297,11 +362,12 @@ Each wave has been smoke-tested live in Chromium (Playwright) against a local Py
 | # | Item | Wave | Status |
 |---|---|---|---|
 | 1 | Create and commit `og-cover.png` (1200×630, editorial-forensic style per §10) | from v2 | Open — broken social cards until done |
-| 2 | Replace placeholder domain `lexicon.justennewton.media` in `<head>` meta + Plausible `data-domain` with the real custom subdomain | from v2 | Open — owner decision |
-| 3 | Initialize a project-local git repo, push to GitHub | v3.1 | Pending — see §2 deploy steps |
-| 4 | Bind real custom domain on Zeabur after first deploy | v3.1 | Pending |
-| 5 | Run `supabase-setup.sql` against self-hosted Supabase + enable RLS + configure Sync Settings on a manager device | v3.1 | Pending |
-| 6 | Verify on real iOS Safari (especially print stylesheet for the new L1/L2/L3 certificates) | from QA | Open |
+| 2 | Replace placeholder domain `lexicon.justennewton.media` in `<head>` meta + Plausible `data-domain` with the real custom subdomain; uncomment the canonical/og:url tags | from v2 | Open — owner decision |
+| 3 | Initialize a project-local git repo, push to GitHub | v3.1 | ✅ Done 2026-05-19 — `SlopesGuru77/complete-roofing-lexicon`, commit `af170b8` |
+| 4 | Bind real custom domain on Zeabur after first deploy | v3.1 | Open — generated `complete-roofing-lexicon.zeabur.app` is live in the meantime |
+| 5 | Stand up self-hosted Supabase on Zeabur at `rkasupabase.zeabur.app`, run `supabase-setup.sql`, enable RLS, configure in-app Sync Settings | v3.1 | In progress 2026-05-19 — internal Postgres env vars resolved; restart + ANON_KEY discovery pending |
+| 6 | Rotate Postgres `PASSWORD` env var on the Supabase service after setup is finished (was pasted in chat 2026-05-19) | v3.1 | Open — operator action |
+| 7 | Verify on real iOS Safari (especially print stylesheet for the new L1/L2/L3 certificates) | from QA | Open |
 
 ### Next-wave candidates (when ready)
 
