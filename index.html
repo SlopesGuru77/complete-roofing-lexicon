@@ -19,12 +19,16 @@
 <meta name="twitter:title" content="The Complete Roofing Lexicon">
 <meta name="twitter:description" content="Commercial, residential, claims, code, damage, and field training. A Justen Newton Media field reference and certification platform.">
 <meta name="twitter:image" content="https://lexicon.justennewton.media/og-cover.png">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- Preconnect to third-party origins so DNS+TLS happen in parallel with HTML parse. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://plausible.io">
+<!-- Fonts as a <link> instead of @import — parses earlier, doesn't block CSS itself. -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap">
+<!-- Plausible analytics. qrious and supabase-js are loaded on demand from Manager/About via ensureSupabase()/ensureQrious() below. -->
 <script>window.plausible=window.plausible||function(){(window.plausible.q=window.plausible.q||[]).push(arguments)}</script>
 <script defer data-domain="lexicon.justennewton.media" src="https://plausible.io/js/script.js"></script>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap');
 :root{
   --ink:#0a0a0a;--paper:#f5f1e8;--paper-dark:#ebe5d3;--paper-line:#d4cdb7;
   --card:#fbf8ef;--red:#b91c1c;--gray:#475569;--gold:#92400e;--good:#1f5d3a;--good-bg:#e9f1ea;
@@ -1016,6 +1020,26 @@ function saveState(){Store.set(KEY,JSON.stringify(state));}
 const RENDER={};
 function track(n,p){try{if(window.plausible)window.plausible(n,p?{props:p}:undefined);}catch(e){}}
 
+/* ===== LAZY-LOADED LIBRARIES =====
+   qrious (~10KB) is only needed in the About tab; supabase-js (~50KB+)
+   is only needed in the Manager tab. Inject them on first use rather
+   than blocking initial page load. Each loader returns a memoized promise. */
+function loadScript(src){return new Promise((resolve,reject)=>{
+  const s=document.createElement("script");s.src=src;s.async=true;
+  s.onload=()=>resolve(true);s.onerror=()=>reject(new Error("Failed to load "+src));
+  document.head.appendChild(s);
+});}
+const ensureSupabase=(()=>{let p;return()=>{
+  if(window.supabase&&window.supabase.createClient)return Promise.resolve(true);
+  if(!p)p=loadScript("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2").catch(e=>{p=null;throw e;});
+  return p;
+};})();
+const ensureQrious=(()=>{let p;return()=>{
+  if(window.QRious)return Promise.resolve(true);
+  if(!p)p=loadScript("https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js").catch(e=>{p=null;throw e;});
+  return p;
+};})();
+
 /* ===== NAV ===== */
 const VIEWS=[["overview","Overview"],["lexicon","Lexicon"],["flash","Flashcards"],["quiz","Quiz"],
   ["scenarios","Scenarios"],["compat","Compatibility"],["hail","Hail Forensics"],["owner","Plain English"],["report","Report Lang"],
@@ -1027,6 +1051,11 @@ function renderNav(){
 }
 function go(v){
   state.view=v;saveState();
+  // Kick off lazy script loads as soon as the user navigates toward a view
+  // that needs them. Fire-and-forget; the view's own UI handles the in-flight
+  // and post-load states.
+  if(v==="manager")ensureSupabase().catch(()=>{});
+  if(v==="about")ensureQrious().catch(()=>{});
   document.querySelectorAll("#tabs button").forEach(b=>b.classList.toggle("active",b.dataset.v===v));
   document.querySelectorAll(".view").forEach(s=>s.classList.remove("show"));
   document.getElementById(v).classList.add("show");
@@ -2087,6 +2116,8 @@ async function sbTest(){
   const cfg=sbCfg();
   const v=sbParseAnonKey(cfg.anonKey);
   if(!v.ok)return{ok:false,msg:v.msg};
+  // Wait for the lazy-loaded supabase-js to arrive before issuing the probe.
+  try{await ensureSupabase();}catch(e){return{ok:false,msg:"Could not load supabase-js from CDN: "+(e&&e.message||e)};}
   // Test by exercising the actual production write path (anon INSERT).
   // SELECT is intentionally not granted to anon in supabase-setup.sql, so a
   // probe SELECT would always fail under RLS even when sync works perfectly.
@@ -2111,6 +2142,7 @@ async function sbTest(){
 }
 async function sbInsert(table,row){
   if(!sbCfg().enabled)return{ok:false,msg:"Sync disabled."};
+  try{await ensureSupabase();}catch(e){return{ok:false,msg:"supabase-js failed to load: "+(e&&e.message||e)};}
   const cli=getSb();if(!cli)return{ok:false,msg:"Client unavailable."};
   try{
     const {error}=await cli.from(sbTable(table)).insert(row);
@@ -2240,7 +2272,7 @@ RENDER.manager=function(){
     </div>
     <h3 class="statline" style="margin-top:24px">Sync Settings (optional Supabase)</h3>
     <div class="panel">
-      <p style="font-family:'Cormorant Garamond',serif;font-size:15px;color:var(--gray);margin-bottom:12px">Configure your self-hosted Supabase URL and the project's <b>anon (public)</b> key. Credentials live only on this device, in localStorage. They are never bundled, logged, or committed to the repo. Schema: run <code>supabase-setup.sql</code> in your Supabase SQL editor first. <span style="color:${sbAvailable()?"var(--good)":"var(--red)"}">Client library: ${sbAvailable()?"loaded":"NOT loaded — check network / CDN access"}.</span></p>
+      <p style="font-family:'Cormorant Garamond',serif;font-size:15px;color:var(--gray);margin-bottom:12px">Configure your self-hosted Supabase URL and the project's <b>anon (public)</b> key. Credentials live only on this device, in localStorage. They are never bundled, logged, or committed to the repo. Schema: run <code>supabase-setup.sql</code> in your Supabase SQL editor first. <span id="sbLibStatus" style="color:${sbAvailable()?"var(--good)":"var(--gray)"}">Client library: ${sbAvailable()?"loaded":"loading…"}</span></p>
       <label class="flbl">Supabase URL</label>
       <input class="field" id="sbUrl" placeholder="https://your-supabase.zeabur.app" value="${esc(sbCfg().url)}" autocomplete="off">
       <label class="flbl" style="margin-top:11px">Anon public key</label>
@@ -2327,6 +2359,15 @@ RENDER.manager=function(){
     const r=await sbSyncRollup();
     sbMsg(r.ok?"Roll-up synced to "+sbTable("progress")+".":("Sync failed: "+r.msg),r.ok);
   });
+  // Keep the "Client library" indicator honest: refresh it once the lazy
+  // supabase-js arrives. No-op if already loaded at render time.
+  if(!sbAvailable())ensureSupabase().then(()=>{
+    const el=document.getElementById("sbLibStatus");
+    if(el){el.style.color="var(--good)";el.textContent="Client library: loaded";}
+  }).catch(()=>{
+    const el=document.getElementById("sbLibStatus");
+    if(el){el.style.color="var(--red)";el.textContent="Client library: failed to load (check CDN access)";}
+  });
 };
 
 /* ===== ABOUT ===== */
@@ -2374,7 +2415,10 @@ RENDER.about=function(){
       try{new QRious({element:document.getElementById("qrCanvas"),value:v,size:300,level:"M"});
         msg.textContent="Scan to open this reference.";}
       catch(e){msg.textContent="Could not render QR for that value.";}
-    }else{msg.textContent="QR library unavailable offline \u2014 share the link directly.";}
+    }else{
+      msg.textContent="Loading QR library\u2026";
+      ensureQrious().then(()=>makeQR()).catch(()=>{msg.textContent="QR library unavailable offline \u2014 share the link directly.";});
+    }
   }
   document.getElementById("qrGen").addEventListener("click",makeQR);
   document.getElementById("copyUrl").addEventListener("click",()=>{
@@ -2389,8 +2433,8 @@ RENDER.about=function(){
 };
 
 /* ===== TESTING SURFACE =====
-   Top-level `const` declarations in a classic <script> don't attach to
-   window, so Playwright `page.evaluate()` can't see them. Expose a curated
+   Top-level const declarations in a classic script element do not attach to
+   window, so Playwright page.evaluate() cannot see them. Expose a curated
    read-only surface for the test suite. No secrets, no app state — pure
    data + pure functions that already run client-side anyway. */
 window.__crl = {
