@@ -1988,12 +1988,21 @@ function getSb(){
 }
 function sbTable(name){return sbCfg().schemaPrefix+name;}
 async function sbTest(){
+  // Test by exercising the actual production write path (anon INSERT).
+  // SELECT is intentionally not granted to anon in supabase-setup.sql, so a
+  // probe SELECT would always fail under RLS even when sync works perfectly.
   const cli=getSb();if(!cli)return{ok:false,msg:"Client unavailable. Check URL, key, and network."};
   try{
-    const {error}=await cli.from(sbTable("progress")).select("id",{count:"exact",head:true}).limit(1);
-    if(error)return{ok:false,msg:"Reachable but query failed: "+(error.message||error.code||"unknown")};
+    const {error}=await cli.from(sbTable("progress")).insert({
+      staff_name:"__sync_test__",
+      event_type:"connectivity_test",
+      module:"sync_test",
+      score:0,
+      payload:{test:true,deviceTs:new Date().toISOString(),v:state.v}
+    });
+    if(error)return{ok:false,msg:"Insert blocked: "+(error.message||error.code||"check anon INSERT policy on "+sbTable("progress"))};
     track("Supabase Sync Tested");
-    return{ok:true,msg:"Connection OK. Table "+sbTable("progress")+" is reachable."};
+    return{ok:true,msg:"Connection OK. Test row inserted into "+sbTable("progress")+" (staff_name = __sync_test__; safe to delete in Studio)."};
   }catch(e){return{ok:false,msg:"Network or client error: "+(e&&e.message||e)};}
 }
 async function sbInsert(table,row){
