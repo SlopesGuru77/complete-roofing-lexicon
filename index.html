@@ -1977,6 +1977,27 @@ RENDER.profile=function(){
 let _sbClient=null,_sbKey="";
 function sbCfg(){return(state.prefs&&state.prefs.supabase)||{url:"",anonKey:"",enabled:false,schemaPrefix:"roofing_training_"};}
 function sbAvailable(){return !!(window.supabase&&window.supabase.createClient);}
+function sbCleanKey(k){return String(k||"").replace(/\s+/g,"");}
+function sbCleanUrl(u){return String(u||"").trim().replace(/\/+$/,"");}
+function sbKeyPreview(k){const c=sbCleanKey(k);if(c.length<14)return c||"(empty)";return c.slice(0,6)+"…"+c.slice(-6)+"  ("+c.length+" chars)";}
+// Returns {ok, role, msg}. Does NOT verify signature — server does that.
+function sbParseAnonKey(k){
+  const key=sbCleanKey(k);
+  if(!key)return{ok:false,msg:"Key is empty."};
+  const parts=key.split(".");
+  if(parts.length!==3)return{ok:false,msg:"Not a JWT (expected 3 dot-separated segments, got "+parts.length+")."};
+  let payload;
+  try{
+    const b64=parts[1].replace(/-/g,"+").replace(/_/g,"/");
+    const pad=b64+"=".repeat((4-b64.length%4)%4);
+    payload=JSON.parse(atob(pad));
+  }catch(e){return{ok:false,msg:"JWT payload is not valid base64-JSON."};}
+  if(!payload.role)return{ok:false,msg:"JWT has no 'role' claim — not a Supabase key."};
+  if(payload.role==="service_role")return{ok:false,msg:"🚨 That's the SERVICE_ROLE key. NEVER use it on the client (bypasses RLS). Use the ANON key from Supabase API settings."};
+  if(payload.role!=="anon")return{ok:false,msg:"Unexpected role '"+payload.role+"'. Use the ANON key."};
+  if(payload.exp&&payload.exp*1000<Date.now())return{ok:false,msg:"This anon key has expired (exp "+new Date(payload.exp*1000).toISOString().slice(0,10)+")."};
+  return{ok:true,role:payload.role,exp:payload.exp};
+}
 function getSb(){
   const c=sbCfg();
   if(!c.url||!c.anonKey)return null;
@@ -1988,6 +2009,12 @@ function getSb(){
 }
 function sbTable(name){return sbCfg().schemaPrefix+name;}
 async function sbTest(){
+  // Validate the key client-side FIRST so common paste mistakes (wrong key,
+  // truncation, accidental service_role) surface as actionable messages
+  // instead of the opaque server-side "Invalid authentication credentials".
+  const cfg=sbCfg();
+  const v=sbParseAnonKey(cfg.anonKey);
+  if(!v.ok)return{ok:false,msg:v.msg};
   // Test by exercising the actual production write path (anon INSERT).
   // SELECT is intentionally not granted to anon in supabase-setup.sql, so a
   // probe SELECT would always fail under RLS even when sync works perfectly.
@@ -2000,7 +2027,12 @@ async function sbTest(){
       score:0,
       payload:{test:true,deviceTs:new Date().toISOString(),v:state.v}
     });
-    if(error)return{ok:false,msg:"Insert blocked: "+(error.message||error.code||"check anon INSERT policy on "+sbTable("progress"))};
+    if(error){
+      const m=(error.message||"").toLowerCase();
+      if(m.includes("invalid authentication")||m.includes("jwt"))return{ok:false,msg:"Server rejected the key (HTTP 401). The JWT decoded as a valid anon key locally, but the signature didn't validate — most often this means the key doesn't belong to this Supabase project. Re-copy the anon key from Studio → API Settings."};
+      if(m.includes("row-level security")||m.includes("rls"))return{ok:false,msg:"RLS blocked the insert. Re-run supabase-setup.sql lines 66-72 to add the anon INSERT policies on "+sbTable("progress")+"."};
+      return{ok:false,msg:"Insert blocked: "+(error.message||error.code||"unknown")};
+    }
     track("Supabase Sync Tested");
     return{ok:true,msg:"Connection OK. Test row inserted into "+sbTable("progress")+" (staff_name = __sync_test__; safe to delete in Studio)."};
   }catch(e){return{ok:false,msg:"Network or client error: "+(e&&e.message||e)};}
@@ -2141,6 +2173,7 @@ RENDER.manager=function(){
       <input class="field" id="sbUrl" placeholder="https://your-supabase.zeabur.app" value="${esc(sbCfg().url)}" autocomplete="off">
       <label class="flbl" style="margin-top:11px">Anon public key</label>
       <input class="field" id="sbKey" type="password" placeholder="eyJhbGciOi..." value="${esc(sbCfg().anonKey)}" autocomplete="off">
+      ${sbCfg().anonKey?`<div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--gray);margin-top:4px">Saved key: <span style="color:var(--ink)">${esc(sbKeyPreview(sbCfg().anonKey))}</span> &mdash; compare with the anon key in your Supabase Studio &rarr; API Settings.</div>`:""}
       <label class="flbl" style="margin-top:11px">Table prefix</label>
       <input class="field" id="sbPrefix" value="${esc(sbCfg().schemaPrefix||"roofing_training_")}" autocomplete="off">
       <div style="display:flex;align-items:center;gap:10px;margin-top:14px">
@@ -2188,20 +2221,26 @@ RENDER.manager=function(){
   // Supabase Sync Settings handlers
   function sbMsg(t,ok){const el=document.getElementById("sbMsg");if(!el)return;el.textContent=t;el.style.color=ok===true?"var(--good)":(ok===false?"var(--red)":"var(--gray)");}
   document.getElementById("sbSave").addEventListener("click",()=>{
+    const rawKey=document.getElementById("sbKey").value;
+    const cleanedKey=sbCleanKey(rawKey);
+    const v=sbParseAnonKey(cleanedKey);
+    if(!v.ok&&cleanedKey){sbMsg(v.msg,false);return;}
     state.prefs.supabase={
-      url:document.getElementById("sbUrl").value.trim(),
-      anonKey:document.getElementById("sbKey").value.trim(),
+      url:sbCleanUrl(document.getElementById("sbUrl").value),
+      anonKey:cleanedKey,
       schemaPrefix:document.getElementById("sbPrefix").value.trim()||"roofing_training_",
       enabled:document.getElementById("sbEnabled").checked
     };
     _sbClient=null;_sbKey="";
-    saveState();sbMsg("Saved on this device. URL and key never leave localStorage.",true);
+    saveState();
+    const prev=cleanedKey?(" Key preview: "+sbKeyPreview(cleanedKey)):"";
+    sbMsg("Saved on this device. URL and key never leave localStorage."+prev,true);
   });
   document.getElementById("sbTest").addEventListener("click",async()=>{
     sbMsg("Testing…");
     const cfg={
-      url:document.getElementById("sbUrl").value.trim(),
-      anonKey:document.getElementById("sbKey").value.trim(),
+      url:sbCleanUrl(document.getElementById("sbUrl").value),
+      anonKey:sbCleanKey(document.getElementById("sbKey").value),
       schemaPrefix:document.getElementById("sbPrefix").value.trim()||"roofing_training_",
       enabled:state.prefs.supabase.enabled
     };
