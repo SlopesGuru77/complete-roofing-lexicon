@@ -82,10 +82,11 @@ npx zeabur@latest deploy --project-id 6a0bec24c08ad7fb8a7dbb3a --service-id 6a0b
 8. ~~Mobile touch targets + reduced-motion + system color-scheme.~~ **Done 2026-05-23** (commit `3aa2a3e`).
 9. ~~Sync outbox with offline retry.~~ **Done 2026-05-23** (commit `60fdc3d`).
 10. ~~Lazy-load supabase-js + qrious; preconnect fonts.~~ **Done 2026-05-23** (commit `0b2ecc8`).
+11. ~~`vf` term verification workflow with annual cadence + manager queue.~~ **Done 2026-05-23** — `state.vf={[termKey]:{date,by}}`, 365-day freshness window via `VF_STALE_DAYS`, dynamic Lexicon badge (`Verify Current Spec` / `Verified YYYY-MM` / `Verification Stale`), Manager → Term Verification Queue panel with per-row + bulk verify. Exposed `vfStatus`, `markVerified`, `unmarkVerified`, `VF_STALE_DAYS`, `vfState` on `window.__crl`. New spec: `tests/term-verification.spec.js` (6 tests, all green).
+12. ~~Team roll-up (offline / JSON-import path).~~ **Done 2026-05-23** — `crl_team_v1` localStorage holds imported per-device snapshots; `teamImport`/`teamRead`/`teamRemove`/`teamClear`/`teamCombinedCerts` helpers. Manager → "Team Roll-Up (Import)" section: multi-file JSON upload, imported-devices table with Remove, Combined Certifications table (local + imports, sorted by date). Dedupe by `name|role|location`. Decision context: supabase-setup.sql intentionally does **not** grant SELECT to anon (write-only schema), so a Supabase READ path requires a schema change. The JSON-import flow ships team value without that dependency and is forward-compatible. New spec: `tests/team-import.spec.js` (7 tests).
 
 **Still open** (queued for Phase 2 of the review plan):
 
 - Verifiable certs (HMAC + public verify page).
-- Team rollup: Manager reads from Supabase, not just localStorage.
-- `vf` term verification workflow with `vfDate` timestamps and a manager-visible queue.
+- Team rollup via Supabase SELECT (requires schema change to grant anon SELECT or a `SECURITY DEFINER` RPC, plus auth model decision).
 - Tier surface (Free / Pro / Team) — no paywalls yet, just signposted upgrade paths.
