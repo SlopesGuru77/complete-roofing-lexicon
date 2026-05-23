@@ -78,8 +78,8 @@ nav.tabs{display:flex;gap:0;margin:20px 0 6px;border-bottom:1px solid var(--ink)
   overflow-x:auto;-webkit-overflow-scrolling:touch;}
 nav.tabs button{font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:.12em;
   text-transform:uppercase;background:none;border:1px solid transparent;border-bottom:none;
-  cursor:pointer;padding:12px 15px;color:var(--gray);position:relative;white-space:nowrap;transition:color .15s;}
-nav.tabs button:hover{color:var(--ink);}
+  cursor:pointer;padding:14px 16px;min-height:44px;color:var(--gray);position:relative;white-space:nowrap;transition:color .15s;}
+nav.tabs button:hover,nav.tabs button:active,nav.tabs button:focus-visible{color:var(--ink);}
 nav.tabs button.active{color:var(--ink);background:var(--card);border-color:var(--ink);margin-bottom:-1px;}
 nav.tabs button.active::after{content:'';position:absolute;left:0;right:0;bottom:0;height:3px;background:var(--red);}
 .view{display:none;padding:26px 0 0;animation:fade .25s ease;}
@@ -92,8 +92,9 @@ nav.tabs button.active::after{content:'';position:absolute;left:0;right:0;bottom
 .lede{font-family:'Cormorant Garamond',serif;font-size:18px;font-style:italic;color:var(--gray);
   margin-bottom:18px;max-width:640px;line-height:1.45;}
 .btn{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;
-  padding:11px 16px;cursor:pointer;background:var(--card);border:1px solid var(--ink);color:var(--ink);transition:all .12s;}
-.btn:hover{background:var(--ink);color:var(--paper);}
+  padding:13px 16px;min-height:44px;cursor:pointer;background:var(--card);border:1px solid var(--ink);color:var(--ink);transition:all .12s;
+  display:inline-flex;align-items:center;justify-content:center;}
+.btn:hover,.btn:active,.btn:focus-visible{background:var(--ink);color:var(--paper);}
 .btn.solid{background:var(--ink);color:var(--paper);}
 .btn.solid:hover{background:var(--red);border-color:var(--red);}
 .btn.red{border-color:var(--red);color:var(--red);}
@@ -128,9 +129,10 @@ label.flbl{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.
 .search-row .ico{position:absolute;left:13px;top:50%;transform:translateY(-50%);
   font-family:'JetBrains Mono',monospace;color:var(--gray);font-size:14px;}
 .chips{display:flex;flex-wrap:wrap;gap:6px;}
-.chip{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.09em;text-transform:uppercase;
-  padding:7px 10px;cursor:pointer;background:var(--paper);border:1px solid var(--paper-line);color:var(--gray);transition:all .12s;}
-.chip:hover{border-color:var(--ink);color:var(--ink);}
+.chip{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.09em;text-transform:uppercase;
+  padding:12px 14px;min-height:40px;cursor:pointer;background:var(--paper);border:1px solid var(--paper-line);color:var(--gray);transition:all .12s;
+  display:inline-flex;align-items:center;}
+.chip:hover,.chip:active,.chip:focus-visible{border-color:var(--ink);color:var(--ink);}
 .chip.active{background:var(--ink);color:var(--paper);border-color:var(--ink);}
 .chip .ct{opacity:.6;margin-left:5px;}
 .statline{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.12em;
@@ -144,7 +146,7 @@ label.flbl{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:13px;}
 .term{background:var(--card);border:1px solid var(--paper-line);border-left:3px solid var(--paper-line);
   padding:15px 16px;transition:border-color .14s,transform .14s;}
-.term:hover{border-left-color:var(--red);transform:translateX(2px);}
+.term:hover,.term:active,.term:focus-within{border-left-color:var(--red);transform:translateX(2px);}
 .term .top{display:flex;justify-content:space-between;align-items:baseline;gap:9px;margin-bottom:6px;}
 .term .name{font-family:'Cormorant Garamond',serif;font-weight:700;font-size:19px;line-height:1.15;}
 .term .tag{font-family:'JetBrains Mono',monospace;font-size:7.5px;letter-spacing:.09em;
@@ -208,7 +210,7 @@ select.pick{font-family:'JetBrains Mono',monospace;font-size:10.5px;padding:9px 
   background:var(--card);border:1px solid var(--paper-line);color:var(--ink);display:flex;gap:11px;align-items:flex-start;transition:all .12s;}
 .q-opt .mk{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;border:1px solid var(--ink);
   width:23px;height:23px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
-.q-opt:hover:not(:disabled){border-color:var(--ink);transform:translateX(2px);}
+.q-opt:hover:not(:disabled),.q-opt:active:not(:disabled),.q-opt:focus-visible:not(:disabled){border-color:var(--ink);transform:translateX(2px);}
 .q-opt.correct{background:var(--good-bg);border-color:var(--good);color:var(--good);}
 .q-opt.correct .mk{border-color:var(--good);}
 .q-opt.wrong{border-color:var(--red);background:rgba(185,28,28,.06);color:var(--red);}
@@ -275,8 +277,28 @@ footer{background:var(--ink);color:var(--paper);margin-top:56px;}
   .grid{grid-template-columns:1fr;}
   .ov-grid{grid-template-columns:1fr;}
   .flashcard{height:300px;}
-  nav.tabs button{padding:11px 12px;font-size:9.5px;}
+  nav.tabs button{padding:14px 14px;font-size:10px;min-height:44px;}
   .certsheet{padding:30px 22px;}
+}
+/* ===== Accessibility — reduced motion + system color-scheme ===== */
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation-duration:0.001ms!important;animation-iteration-count:1!important;transition-duration:0.001ms!important;scroll-behavior:auto!important;}
+  .flashcard.flipped .fc-inner{transform:rotateY(180deg);}
+}
+/* When the user hasn't manually picked a theme (html[data-theme-manual="0"]),
+   follow the OS preference. The applyTheme() function sets the data-theme-manual
+   attribute on <html>; CSS reads it to decide whether to honor prefers-color-scheme. */
+@media (prefers-color-scheme: dark){
+  html[data-theme-manual="0"]{
+    --ink:#e8e6df;--paper:#0b0d10;--paper-dark:#15181d;--paper-line:#2a2e36;
+    --card:#13161b;--red:#ef6b6b;--gray:#9aa0ad;--gold:#d4a35a;--good:#5cc28d;--good-bg:#163025;
+  }
+  html[data-theme-manual="0"] body{background:#0b0d10;background-image:none;color:#e8e6df;}
+  html[data-theme-manual="0"] .seal{background:#e8e6df;color:#0b0d10;}
+  html[data-theme-manual="0"] .term .def,html[data-theme-manual="0"] .panel p,html[data-theme-manual="0"] .fc-back .fc-def,html[data-theme-manual="0"] .about-body p,html[data-theme-manual="0"] .q-prompt,html[data-theme-manual="0"] .q-situation,html[data-theme-manual="0"] .q-opt{color:#d2cfc6;}
+  html[data-theme-manual="0"] .fc-front{background:#1a1d23;color:#e8e6df;}
+  html[data-theme-manual="0"] footer{background:#06080a;}
+  html[data-theme-manual="0"] .mgr-table th{background:#1a1d23;}
 }
 @media print{
   body *{visibility:hidden;}
@@ -953,14 +975,21 @@ function acceptedAnswers(t){
   return set.map(norm).filter(Boolean);
 }
 let state;
-function defState(){return{v:3,name:"",role:"",location:"",cards:{},quizMissed:[],missedCount:{},certs:[],bestSpeed:0,scenDone:[],compatDone:[],tcDone:[],streak:{n:0,last:""},view:"overview",prefs:{dark:false,passcode:"ROOF123",supabase:{url:"",anonKey:"",enabled:false,schemaPrefix:"roofing_training_"}},mgrUnlocked:false};}
+function defState(){return{v:3,name:"",role:"",location:"",cards:{},quizMissed:[],missedCount:{},certs:[],bestSpeed:0,scenDone:[],compatDone:[],tcDone:[],streak:{n:0,last:""},view:"overview",prefs:{dark:false,themeManual:false,passcode:"ROOF123",supabase:{url:"",anonKey:"",enabled:false,schemaPrefix:"roofing_training_"}},mgrUnlocked:false};}
 function loadState(){
   const def=defState();
-  try{state=Object.assign(def,JSON.parse(Store.get(KEY)||"{}"));}catch(e){state=def;}
+  let parsed={};
+  try{parsed=JSON.parse(Store.get(KEY)||"{}");}catch(e){}
+  state=Object.assign(def,parsed);
   state.prefs=Object.assign({},def.prefs,state.prefs||{});
   state.streak=Object.assign({},def.streak,state.streak||{});
   if(!state.missedCount)state.missedCount={};
   if(!Array.isArray(state.tcDone))state.tcDone=[];
+  // Migration: pre-themeManual users who had dark=true should keep dark
+  // (no flicker on system-light displays). Detected by absence of the new key.
+  if(parsed.prefs&&parsed.prefs.dark===true&&parsed.prefs.themeManual===undefined){
+    state.prefs.themeManual=true;
+  }
   const t=todayStr(),y=new Date(Date.now()-86400000).toISOString().slice(0,10);
   if(state.streak.last!==t){
     state.streak.n=(state.streak.last===y)?(state.streak.n||0)+1:1;
@@ -970,7 +999,18 @@ function loadState(){
   saveState();
 }
 function applyTheme(){
-  try{document.documentElement.classList.toggle("dark",!!(state&&state.prefs&&state.prefs.dark));}catch(e){}
+  try{
+    const root=document.documentElement;
+    const manual=!!(state&&state.prefs&&state.prefs.themeManual);
+    root.setAttribute("data-theme-manual",manual?"1":"0");
+    if(manual){
+      root.classList.toggle("dark",!!(state.prefs.dark));
+    }else{
+      // CSS @media (prefers-color-scheme: dark) handles the OS-follow case
+      // via the data-theme-manual="0" selector; clear the explicit override.
+      root.classList.remove("dark");
+    }
+  }catch(e){}
 }
 function saveState(){Store.set(KEY,JSON.stringify(state));}
 const RENDER={};
@@ -1923,9 +1963,10 @@ RENDER.profile=function(){
       </div>
       <div class="panel">
         <h3>Display</h3>
-        <p>Toggle the dark theme for low-light reading and jobsite use.</p>
+        <p>Toggle the dark theme for low-light reading and jobsite use. ${state.prefs.themeManual?"":"<em>Following your system preference.</em>"}</p>
         <div class="btnrow">
-          <button class="btn" id="pfTheme">${state.prefs.dark?"Switch to Light":"Switch to Dark"}</button>
+          <button class="btn" id="pfTheme">${(function(){try{const dark=document.documentElement.classList.contains("dark")||(!state.prefs.themeManual&&window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches);return dark?"Switch to Light":"Switch to Dark";}catch(e){return state.prefs.dark?"Switch to Light":"Switch to Dark";}})()}</button>
+          ${state.prefs.themeManual?'<button class="btn ghost" id="pfThemeAuto">Use System Theme</button>':""}
         </div>
         <h3 style="margin-top:18px">Backup &amp; Transfer</h3>
         <p>Move progress between devices or back it up before clearing browser data.</p>
@@ -1959,7 +2000,23 @@ RENDER.profile=function(){
     document.getElementById("pfMsg").textContent="Progress reset.";
   });
   document.getElementById("pfTheme").addEventListener("click",()=>{
-    state.prefs.dark=!state.prefs.dark;saveState();applyTheme();RENDER.profile();track("Theme Toggled");
+    // If currently following system, snap to the opposite of what system shows
+    // so the click feels like a real toggle, not a no-op.
+    if(!state.prefs.themeManual){
+      const sysDark=window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches;
+      state.prefs.dark=!sysDark;
+    }else{
+      state.prefs.dark=!state.prefs.dark;
+    }
+    state.prefs.themeManual=true;
+    saveState();applyTheme();RENDER.profile();
+    track("Theme Toggled",{to:state.prefs.dark?"dark":"light"});
+  });
+  const pfAuto=document.getElementById("pfThemeAuto");
+  if(pfAuto)pfAuto.addEventListener("click",()=>{
+    state.prefs.themeManual=false;
+    saveState();applyTheme();RENDER.profile();
+    track("Theme Auto");
   });
   document.getElementById("pfExport").addEventListener("click",()=>{
     const blob=new Blob([JSON.stringify(state,null,2)],{type:"application/json"});
