@@ -9,6 +9,9 @@
 <link rel="canonical" href="https://lexicon.justennewton.media/">
 <meta name="theme-color" content="#0a0a0a">
 <link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iIzBhMGEwYSIvPjx0ZXh0IHg9IjUwIiB5PSI2OSIgZm9udC1mYW1pbHk9Ikdlb3JnaWEsc2VyaWYiIGZvbnQtc2l6ZT0iNTIiIGZvbnQtd2VpZ2h0PSJib2xkIiBmaWxsPSIjZjVmMWU4IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5KTjwvdGV4dD48L3N2Zz4=">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<link rel="apple-touch-icon" sizes="512x512" href="/icon-512.png">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Justen Newton Media">
 <meta property="og:title" content="The Complete Roofing Lexicon">
@@ -2002,6 +2005,11 @@ RENDER.profile=function(){
           <button class="btn" id="pfTheme">${(function(){try{const dark=document.documentElement.classList.contains("dark")||(!state.prefs.themeManual&&window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches);return dark?"Switch to Light":"Switch to Dark";}catch(e){return state.prefs.dark?"Switch to Light":"Switch to Dark";}})()}</button>
           ${state.prefs.themeManual?'<button class="btn ghost" id="pfThemeAuto">Use System Theme</button>':""}
         </div>
+        <h3 style="margin-top:18px">Install</h3>
+        <p>Add the Lexicon to your home screen so it opens like a native app — works offline for the lexicon, flashcards, quizzes, and certification.</p>
+        <div class="btnrow">
+          ${_deferredInstall?'<button class="btn solid" id="pfInstall">Install on this device</button>':'<span style="font-family:\'JetBrains Mono\',monospace;font-size:9.5px;letter-spacing:.1em;color:var(--gray)">Browser install prompt not available. On iOS Safari: Share → Add to Home Screen.</span>'}
+        </div>
         <h3 style="margin-top:18px">Backup &amp; Transfer</h3>
         <p>Move progress between devices or back it up before clearing browser data.</p>
         <div class="io-row">
@@ -2051,6 +2059,18 @@ RENDER.profile=function(){
     state.prefs.themeManual=false;
     saveState();applyTheme();RENDER.profile();
     track("Theme Auto");
+  });
+  const pfInstall=document.getElementById("pfInstall");
+  if(pfInstall)pfInstall.addEventListener("click",async()=>{
+    if(!_deferredInstall)return;
+    track("PWA Install Clicked");
+    _deferredInstall.prompt();
+    try{
+      const choice=await _deferredInstall.userChoice;
+      track("PWA Install "+(choice&&choice.outcome==="accepted"?"Accepted":"Dismissed"));
+    }catch(e){}
+    _deferredInstall=null;
+    RENDER.profile();
   });
   document.getElementById("pfExport").addEventListener("click",()=>{
     const blob=new Blob([JSON.stringify(state,null,2)],{type:"application/json"});
@@ -2530,6 +2550,34 @@ window.__crl = {
   outboxPush, outboxRead, outboxFlush, outboxPending,
   OUTBOX_KEY, sbInsert, sbCfg
 };
+
+/* ===== PWA INSTALL — capture the install prompt for the Profile button ===== */
+let _deferredInstall=null;
+try{
+  window.addEventListener("beforeinstallprompt",e=>{
+    e.preventDefault();
+    _deferredInstall=e;
+    // If Profile is currently visible, re-render to expose the install button.
+    if(state&&state.view==="profile"&&typeof RENDER.profile==="function")RENDER.profile();
+    track("PWA Install Available");
+  });
+  window.addEventListener("appinstalled",()=>{
+    _deferredInstall=null;
+    track("PWA Installed");
+    if(state&&state.view==="profile"&&typeof RENDER.profile==="function")RENDER.profile();
+  });
+}catch(e){}
+
+/* ===== SERVICE WORKER — offline shell + cache for og-cover, icons, fonts ===== */
+try{
+  if("serviceWorker" in navigator){
+    // Register after window load so the SW install doesn't compete with
+    // first paint for network/CPU.
+    window.addEventListener("load",()=>{
+      navigator.serviceWorker.register("/sw.js").catch(()=>{});
+    });
+  }
+}catch(e){}
 
 /* ===== INIT ===== */
 loadState();
