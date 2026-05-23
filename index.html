@@ -1054,7 +1054,12 @@ function go(v){
   // Kick off lazy script loads as soon as the user navigates toward a view
   // that needs them. Fire-and-forget; the view's own UI handles the in-flight
   // and post-load states.
-  if(v==="manager")ensureSupabase().catch(()=>{});
+  if(v==="manager"){
+    ensureSupabase().catch(()=>{});
+    // Opportunistically flush any queued events when the operator opens
+    // the Manager — it's the moment they're most likely to look at sync.
+    if(outboxPending()>0)outboxFlush().then(()=>{if(state.view==="manager"&&state.mgrUnlocked)RENDER.manager();});
+  }
   if(v==="about")ensureQrious().catch(()=>{});
   document.querySelectorAll("#tabs button").forEach(b=>b.classList.toggle("active",b.dataset.v===v));
   document.querySelectorAll(".view").forEach(s=>s.classList.remove("show"));
@@ -2140,16 +2145,89 @@ async function sbTest(){
     return{ok:true,msg:"Connection OK. Test row inserted into "+sbTable("progress")+" (staff_name = __sync_test__; safe to delete in Studio)."};
   }catch(e){return{ok:false,msg:"Network or client error: "+(e&&e.message||e)};}
 }
+/* ===== OUTBOX — offline retry for Supabase sync =====
+   Roofers don't have signal on roofs. A sync that fails silently is worse
+   than one that queues. Every cert and roll-up goes through sbInsert; on
+   any failure (offline, client absent, server error) the row is appended
+   to a localStorage outbox and re-attempted on next online event or on
+   the next Manager view open. Items that fail 8 times are dropped and
+   logged via the Plausible "Outbox Dropped" event. */
+const OUTBOX_KEY="crl_outbox_v1";
+const OUTBOX_MAX_TRIES=8;
+function outboxRead(){try{const v=JSON.parse(Store.get(OUTBOX_KEY)||"[]");return Array.isArray(v)?v:[];}catch(e){return[];}}
+function outboxWrite(a){Store.set(OUTBOX_KEY,JSON.stringify(a||[]));}
+function outboxPending(){return outboxRead().length;}
+function outboxPush(table,row){
+  const a=outboxRead();
+  a.push({table,row,enq:Date.now(),tries:0});
+  // Cap the outbox so a broken sync target can't grow localStorage without bound.
+  outboxWrite(a.slice(-500));
+  track("Sync Queued",{table});
+}
+let _outboxFlushing=false;
+async function outboxFlush(){
+  if(_outboxFlushing)return{flushed:0,remaining:outboxPending(),skipped:"in-flight"};
+  if(!sbCfg().enabled)return{flushed:0,remaining:outboxPending(),skipped:"sync disabled"};
+  if(typeof navigator!=="undefined"&&navigator.onLine===false)return{flushed:0,remaining:outboxPending(),skipped:"offline"};
+  let queue=outboxRead();
+  if(queue.length===0)return{flushed:0,remaining:0};
+  _outboxFlushing=true;
+  try{await ensureSupabase();}catch(e){_outboxFlushing=false;return{flushed:0,remaining:queue.length,skipped:"library load failed"};}
+  const cli=getSb();
+  if(!cli){_outboxFlushing=false;return{flushed:0,remaining:queue.length,skipped:"client unavailable"};}
+  let flushed=0;const remaining=[];
+  for(const item of queue){
+    try{
+      const {error}=await cli.from(sbTable(item.table)).insert(item.row);
+      if(error){
+        item.tries=(item.tries||0)+1;
+        if(item.tries<OUTBOX_MAX_TRIES)remaining.push(item);
+        else track("Outbox Dropped",{table:item.table,reason:(error.message||"unknown").slice(0,80)});
+      }else{
+        flushed++;
+      }
+    }catch(e){
+      item.tries=(item.tries||0)+1;
+      if(item.tries<OUTBOX_MAX_TRIES)remaining.push(item);
+      else track("Outbox Dropped",{table:item.table,reason:String(e&&e.message||e).slice(0,80)});
+    }
+  }
+  outboxWrite(remaining);
+  _outboxFlushing=false;
+  if(flushed)track("Outbox Flushed",{count:flushed,remaining:remaining.length});
+  return{flushed,remaining:remaining.length};
+}
 async function sbInsert(table,row){
   if(!sbCfg().enabled)return{ok:false,msg:"Sync disabled."};
-  try{await ensureSupabase();}catch(e){return{ok:false,msg:"supabase-js failed to load: "+(e&&e.message||e)};}
-  const cli=getSb();if(!cli)return{ok:false,msg:"Client unavailable."};
+  // Offline-or-no-client path: queue and report success to the caller. The
+  // user's cert run shouldn't appear to fail just because their wifi dropped.
+  if(typeof navigator!=="undefined"&&navigator.onLine===false){
+    outboxPush(table,row);
+    return{ok:true,queued:true,msg:"Queued for sync (offline). "+outboxPending()+" pending."};
+  }
+  try{await ensureSupabase();}catch(e){
+    outboxPush(table,row);
+    return{ok:true,queued:true,msg:"Queued: supabase-js load failed ("+(e&&e.message||e)+")"};
+  }
+  const cli=getSb();
+  if(!cli){
+    outboxPush(table,row);
+    return{ok:true,queued:true,msg:"Queued: client unavailable."};
+  }
   try{
     const {error}=await cli.from(sbTable(table)).insert(row);
-    if(error){track("Supabase Sync Failed");return{ok:false,msg:error.message||error.code||"insert failed"};}
+    if(error){
+      outboxPush(table,row);
+      track("Supabase Sync Failed");
+      return{ok:false,queued:true,msg:(error.message||error.code||"insert failed")+" — queued for retry ("+outboxPending()+" pending)"};
+    }
     track("Supabase Sync Success");
     return{ok:true};
-  }catch(e){track("Supabase Sync Failed");return{ok:false,msg:e&&e.message||String(e)};}
+  }catch(e){
+    outboxPush(table,row);
+    track("Supabase Sync Failed");
+    return{ok:false,queued:true,msg:(e&&e.message||String(e))+" — queued for retry"};
+  }
 }
 function sbSyncCert(cert){
   return sbInsert("certifications",{
@@ -2288,8 +2366,10 @@ RENDER.manager=function(){
         <button class="btn solid" id="sbSave">Save</button>
         <button class="btn" id="sbTest">Test Connection</button>
         <button class="btn" id="sbSyncNow">Sync Roll-Up Now</button>
+        <button class="btn ghost" id="sbFlushOutbox">Flush Queue (${outboxPending()})</button>
       </div>
       <div id="sbMsg" style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.08em;color:var(--gray);margin-top:10px;min-height:14px"></div>
+      ${outboxPending()>0?`<div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.08em;color:var(--gold);margin-top:6px"><b>${outboxPending()}</b> event${outboxPending()===1?"":"s"} queued for retry — will flush automatically when online + sync enabled.</div>`:""}
     </div>
 
     <h3 class="statline" style="margin-top:24px">Settings</h3>
@@ -2358,6 +2438,13 @@ RENDER.manager=function(){
     sbMsg("Syncing roll-up…");
     const r=await sbSyncRollup();
     sbMsg(r.ok?"Roll-up synced to "+sbTable("progress")+".":("Sync failed: "+r.msg),r.ok);
+  });
+  document.getElementById("sbFlushOutbox").addEventListener("click",async()=>{
+    if(outboxPending()===0){sbMsg("Queue is empty — nothing to flush.");return;}
+    sbMsg("Flushing "+outboxPending()+" queued event(s)…");
+    const r=await outboxFlush();
+    sbMsg("Flushed "+r.flushed+" / queued. "+r.remaining+" remaining"+(r.skipped?(" (skipped: "+r.skipped+")"):"."),r.flushed>0);
+    if(state.view==="manager"&&state.mgrUnlocked)RENDER.manager();
   });
   // Keep the "Client library" indicator honest: refresh it once the lazy
   // supabase-js arrives. No-op if already loaded at render time.
@@ -2439,13 +2526,22 @@ RENDER.about=function(){
    data + pure functions that already run client-side anyway. */
 window.__crl = {
   TERMS, CATS, LEVELS, SCENARIOS, COMPAT, TEST_CUT_STEPS, HAIL_THRESHOLDS,
-  buildCert, sbParseAnonKey, sbCleanKey
+  buildCert, sbParseAnonKey, sbCleanKey,
+  outboxPush, outboxRead, outboxFlush, outboxPending,
+  OUTBOX_KEY, sbInsert, sbCfg
 };
 
 /* ===== INIT ===== */
 loadState();
 renderNav();
 go(VIEWS.some(v=>v[0]===state.view)?state.view:"overview");
+
+// Sync outbox auto-flush: any queued rows from a prior offline session try
+// once on boot, then whenever the browser regains connectivity.
+try{
+  window.addEventListener("online",()=>outboxFlush());
+  if(outboxPending()>0&&(typeof navigator==="undefined"||navigator.onLine!==false))outboxFlush();
+}catch(e){}
 </script>
 </body>
 </html>
