@@ -2388,6 +2388,16 @@ RENDER.about=function(){
   if(url)makeQR();
 };
 
+/* ===== TESTING SURFACE =====
+   Top-level `const` declarations in a classic <script> don't attach to
+   window, so Playwright `page.evaluate()` can't see them. Expose a curated
+   read-only surface for the test suite. No secrets, no app state — pure
+   data + pure functions that already run client-side anyway. */
+window.__crl = {
+  TERMS, CATS, LEVELS, SCENARIOS, COMPAT, TEST_CUT_STEPS, HAIL_THRESHOLDS,
+  buildCert, sbParseAnonKey, sbCleanKey
+};
+
 /* ===== INIT ===== */
 loadState();
 renderNav();

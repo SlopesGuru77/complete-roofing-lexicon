@@ -1,0 +1,16 @@
+{
+  "name": "complete-roofing-lexicon-tests",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Test harness for The Complete Roofing Lexicon. The app itself is a single static index.html with no build step — this package.json exists only to install Playwright and a static file server for tests.",
+  "scripts": {
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "test:headed": "playwright test --headed",
+    "serve": "http-server . -p 8765 -s -c-1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.60.0",
+    "http-server": "^14.1.1"
+  }
+}

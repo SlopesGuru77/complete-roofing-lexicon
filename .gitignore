@@ -31,6 +31,13 @@ probe.js
 .playwright-mcp/
 .superpowers/
 _staging/
+.parse-check.tmp.js
+
+# Test harness
+node_modules/
+playwright-report/
+test-results/
+blob-report/
 
 # Wave / handoff backups (keep the live files, drop dated backups)
 *.bak.md
