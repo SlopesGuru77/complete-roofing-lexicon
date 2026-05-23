@@ -41,7 +41,7 @@ Per-card schema is `{box, seen, missed, last}` (Leitner: box 0–5, mastered at 
 - **Originality is a legal requirement.** Term scope was *informed by* Brian Lemke's Building Owners Guide, plus NRCA/ASTM. Every definition was written independently and must stay that way. Credit Lemke / NRCA / ASTM as references in About + footer; never copy or closely paraphrase source text. See handoff §3.1.
 - **Verify dated facts before writing definitions.** Source material is years old (e.g., "Firestone Building Products" is now Elevate/Holcim; ASTM specs get revised). Use the existing `vf` "Verify Current Spec" flag on time-sensitive terms.
 - **Storage compatibility.** `Store` must keep its in-memory fallback so the app runs in sandboxed previews where localStorage throws. If you change the `state` shape, bump a version in the key or migrate on load.
-- **Placeholders to replace before launch:** `lexicon.justennewton.media` in `<head>` meta tags and Plausible `data-domain`; `og-cover.png` (1200×630) does not exist yet and must be created in repo root.
+- **Domain + assets are live:** App is bound at `https://lexicon.justennewton.media` (apex `justennewton.media` registered at Namecheap; CNAME → `complete-roofing-lexicon.zeabur.app`; Caddy auto-issues TLS). `og-cover.png` (1200×630) is committed in repo root and serves from the live host.
 
 ## Brand / voice (when generating UI or copy)
 
@@ -66,7 +66,7 @@ npx zeabur@latest deploy --project-id 6a0bec24c08ad7fb8a7dbb3a --service-id 6a0b
 
 ## Pending post-deploy work
 
-1. Bind real custom subdomain on Zeabur (`lexicon.justennewton.media` or whichever — owner decision).
-2. Run `supabase-setup.sql` in self-hosted Supabase, then enter URL + anon key in deployed app → Manager → Sync Settings.
-3. Create and commit `og-cover.png` (1200×630) to fix social previews.
-4. Re-enable the commented-out `<link rel="canonical">` and `<meta property="og:url">` in `index.html` once the real domain is bound.
+1. ~~Bind real custom subdomain on Zeabur.~~ **Done 2026-05-22.** Live at `https://lexicon.justennewton.media`.
+2. Run `supabase-setup.sql` in self-hosted Supabase, then enter URL + anon key in deployed app → Manager → Sync Settings. *(SQL already executed 2026-05-19; sync code fixed in `37456ca`; awaiting first real cert-sync round-trip from owner device.)*
+3. ~~Create and commit `og-cover.png`~~ **Done 2026-05-22** (commit `646f344`).
+4. ~~Re-enable canonical + og:url~~ **Done 2026-05-22** alongside domain bind.
