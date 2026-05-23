@@ -165,6 +165,8 @@ label.flbl{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.
 .tierbadge.t3{border-color:var(--red);color:var(--red);}
 .vflag{font-family:'JetBrains Mono',monospace;font-size:7.5px;letter-spacing:.08em;text-transform:uppercase;
   padding:3px 7px;background:rgba(146,64,14,.1);color:var(--gold);border:1px solid rgba(146,64,14,.3);}
+.vflag.vf-fresh{background:rgba(31,93,58,.08);color:var(--good);border-color:rgba(31,93,58,.3);}
+.vflag.vf-stale{background:rgba(185,28,28,.08);color:var(--red);border-color:rgba(185,28,28,.3);}
 .term .note{margin-top:10px;border-left:2px solid var(--red);background:rgba(185,28,28,.04);padding:8px 10px;}
 .term .note .lbl{font-family:'JetBrains Mono',monospace;font-size:7.5px;letter-spacing:.14em;
   text-transform:uppercase;color:var(--red);margin-bottom:3px;}
@@ -982,7 +984,22 @@ function acceptedAnswers(t){
   return set.map(norm).filter(Boolean);
 }
 let state;
-function defState(){return{v:3,name:"",role:"",location:"",cards:{},quizMissed:[],missedCount:{},certs:[],bestSpeed:0,scenDone:[],compatDone:[],tcDone:[],streak:{n:0,last:""},view:"overview",prefs:{dark:false,themeManual:false,passcode:"ROOF123",supabase:{url:"",anonKey:"",enabled:false,schemaPrefix:"roofing_training_"}},mgrUnlocked:false};}
+function defState(){return{v:3,name:"",role:"",location:"",cards:{},quizMissed:[],missedCount:{},certs:[],bestSpeed:0,scenDone:[],compatDone:[],tcDone:[],vf:{},streak:{n:0,last:""},view:"overview",prefs:{dark:false,themeManual:false,passcode:"ROOF123",supabase:{url:"",anonKey:"",enabled:false,schemaPrefix:"roofing_training_"}},mgrUnlocked:false};}
+const VF_STALE_DAYS=365;
+function vfStatus(termKey){
+  const e=(state&&state.vf)?state.vf[termKey]:null;
+  if(!e||!e.date)return"never";
+  const ageMs=Date.now()-new Date(e.date+"T00:00:00").getTime();
+  return(ageMs>VF_STALE_DAYS*86400000)?"stale":"fresh";
+}
+function markVerified(termKey,by){
+  if(!state.vf)state.vf={};
+  state.vf[termKey]={date:todayStr(),by:(by||state.name||"").slice(0,80)};
+  saveState();track("Term Verified",{term:termKey});
+}
+function unmarkVerified(termKey){
+  if(state.vf&&state.vf[termKey]){delete state.vf[termKey];saveState();}
+}
 function loadState(){
   const def=defState();
   let parsed={};
@@ -992,6 +1009,7 @@ function loadState(){
   state.streak=Object.assign({},def.streak,state.streak||{});
   if(!state.missedCount)state.missedCount={};
   if(!Array.isArray(state.tcDone))state.tcDone=[];
+  if(!state.vf||typeof state.vf!=="object"||Array.isArray(state.vf))state.vf={};
   // Migration: pre-themeManual users who had dark=true should keep dark
   // (no flicker on system-light displays). Detected by absence of the new key.
   if(parsed.prefs&&parsed.prefs.dark===true&&parsed.prefs.themeManual===undefined){
@@ -1247,12 +1265,19 @@ RENDER.overview=function(){
 
 /* ===== LEXICON ===== */
 let lexCat="all",lexTier="all",lexSearch="",lexLit=false;
+function vfBadgeHTML(t){
+  if(!t.vf)return"";
+  const s=vfStatus(t.t),e=(state.vf||{})[t.t];
+  if(s==="fresh")return`<span class="vflag vf-fresh" title="Verified ${esc(e.date)}${e.by?" by "+esc(e.by):""}">Verified ${esc(e.date.slice(0,7))}</span>`;
+  if(s==="stale")return`<span class="vflag vf-stale" title="Last verified ${esc(e.date)} — past ${VF_STALE_DAYS}-day window">Verification Stale</span>`;
+  return`<span class="vflag" title="Time-sensitive — needs current-spec check">Verify Current Spec</span>`;
+}
 function termCard(t){
   let h=`<div class="term"><div class="top"><div class="name">${esc(t.t)}</div>`+
     `<div class="tag">${esc(catMap[t.c].name)}</div></div>`+
     `<div class="def">${esc(t.d)}</div><div class="meta">`+
     `<span class="tierbadge${t.tier===3?" t3":""}">${TIER_NAME[t.tier]}</span>`+
-    (t.vf?`<span class="vflag">Verify Current Spec</span>`:"")+`</div>`;
+    vfBadgeHTML(t)+`</div>`;
   if(t.n)h+=`<div class="note"><div class="lbl">Field Note</div><div class="txt">${esc(t.n)}</div></div>`;
   if(t.see&&t.see.length)
     h+=`<div class="see">Related: ${t.see.map(s=>`<b data-see="${esc(s)}">${esc(s)}</b>`).join(" &middot; ")}</div>`;
@@ -2276,6 +2301,51 @@ function sbSyncRollup(){
   });
 }
 
+/* ===== TEAM IMPORT — offline roll-up by combining per-device JSON exports =====
+   The supabase-setup.sql schema is intentionally write-only for the anon role
+   (no SELECT grant on certifications), so the Manager can't read the team
+   back from sync. This is the offline-first alternative: each device exports
+   JSON via Manager → "Download Full Progress JSON", and the lead device
+   imports them here. Dedupe is by deviceId+importedAt slot; same file
+   re-imported overwrites the previous slot. Stored in a separate key so it
+   doesn't bloat per-device state and doesn't break the existing schema. */
+const TEAM_KEY="crl_team_v1";
+const TEAM_MAX_DEVICES=50;
+function teamRead(){try{const v=JSON.parse(Store.get(TEAM_KEY)||"[]");return Array.isArray(v)?v:[];}catch(e){return[];}}
+function teamWrite(a){Store.set(TEAM_KEY,JSON.stringify((a||[]).slice(-TEAM_MAX_DEVICES)));}
+function teamDeviceId(snap){
+  // Stable-ish per-device id derived from staff name + role + location. Two
+  // devices for the same staff member overwrite (intended — the latest export
+  // is the canonical record); two staff with identical name+role+location
+  // collide (rare; manager can rename in Profile to disambiguate).
+  const k=[snap.name||"",snap.role||"",snap.location||""].join("|");
+  return k.toLowerCase().replace(/[^a-z0-9|]+/g,"-");
+}
+function teamImport(json){
+  let snap;
+  try{snap=typeof json==="string"?JSON.parse(json):json;}
+  catch(e){return{ok:false,msg:"Not valid JSON: "+(e&&e.message||e)};}
+  if(!snap||typeof snap!=="object"||Array.isArray(snap))return{ok:false,msg:"Expected a progress JSON object, not "+(Array.isArray(snap)?"an array":typeof snap)+"."};
+  if(snap.v===undefined||!("cards" in snap)||!Array.isArray(snap.certs))return{ok:false,msg:"Doesn't look like a Roofing Lexicon export (missing v / cards / certs). Use Manager → Download Full Progress JSON on the source device."};
+  const id=teamDeviceId(snap);
+  if(!id||id==="--")return{ok:false,msg:"Source device has no staff name set — fill in Profile → Name on the source device, re-export, and try again."};
+  const list=teamRead().filter(d=>d.id!==id);
+  list.push({id,name:snap.name||"(unnamed)",role:snap.role||"",location:snap.location||"",importedAt:new Date().toISOString(),snap});
+  teamWrite(list);
+  track("Team Import",{role:snap.role||"unset"});
+  return{ok:true,id,replaced:list.length<teamRead().length+1};
+}
+function teamRemove(id){teamWrite(teamRead().filter(d=>d.id!==id));track("Team Device Removed");}
+function teamClear(){teamWrite([]);track("Team Imports Cleared");}
+function teamCombinedCerts(){
+  const rows=[];
+  (state.certs||[]).forEach(c=>rows.push({staff:state.name||"(this device)",role:state.role||"",src:"local",at:c.at,level:c.level||0,levelName:c.levelName||"",score:c.score,pass:!!c.pass}));
+  teamRead().forEach(d=>{
+    ((d.snap&&d.snap.certs)||[]).forEach(c=>rows.push({staff:d.name||"(unnamed)",role:d.role||"",src:"imported",at:c.at,level:c.level||0,levelName:c.levelName||"",score:c.score,pass:!!c.pass}));
+  });
+  return rows.sort((a,b)=>(b.at||"").localeCompare(a.at||""));
+}
+
 /* ===== MANAGER ===== */
 function groupStats(){
   return CATS.map(c=>{
@@ -2338,6 +2408,24 @@ RENDER.manager=function(){
   }).join("");
   const missedRows=missed.length?missed.map(m=>`<tr><td>${esc(m.term)}</td><td>${esc((catMap[m.cat]||{}).name||m.cat)}</td><td class="num">${m.missed}</td><td class="num">${m.seen}</td><td class="num">Box ${m.box}</td></tr>`).join(""):`<tr><td colspan="5" style="text-align:center;font-style:italic;color:var(--gray)">No misses recorded yet on this device. Run flashcards or a quiz to populate this list.</td></tr>`;
   const certRows=(state.certs||[]).length?state.certs.map(c=>`<tr><td>${esc(c.at)}</td><td>${c.level?("L"+c.level+(c.levelName?" — "+esc(c.levelName):"")):"&mdash;"}</td><td class="num">${c.score}%</td><td>${c.pass?'<span style="color:var(--good)">Passed</span>':'<span style="color:var(--red)">Not yet</span>'}</td></tr>`).join(""):`<tr><td colspan="4" style="text-align:center;font-style:italic;color:var(--gray)">No certification attempts yet.</td></tr>`;
+  const vfTerms=TERMS.filter(t=>t.vf);
+  const vfShowAll=!!state.mgrVfShowAll;
+  const vfVisible=vfTerms.filter(t=>vfShowAll||vfStatus(t.t)!=="fresh");
+  const vfCounts={fresh:0,stale:0,never:0};vfTerms.forEach(t=>{vfCounts[vfStatus(t.t)]++;});
+  const vfStatusCell=(t)=>{
+    const s=vfStatus(t.t);
+    if(s==="fresh")return`<span style="color:var(--good);font-weight:600">Fresh</span>`;
+    if(s==="stale")return`<span style="color:var(--red);font-weight:600">Stale</span>`;
+    return`<span style="color:var(--gold);font-weight:600">Never</span>`;
+  };
+  const vfRows=vfVisible.length?vfVisible.sort((a,b)=>{
+    const order={stale:0,never:1,fresh:2};
+    const oa=order[vfStatus(a.t)],ob=order[vfStatus(b.t)];
+    return oa!==ob?oa-ob:a.t.localeCompare(b.t);
+  }).map(t=>{
+    const e=(state.vf||{})[t.t]||{};
+    return`<tr><td>${esc(t.t)}</td><td>${esc((catMap[t.c]||{}).name||t.c)}</td><td class="num">T${t.tier}</td><td>${vfStatusCell(t)}</td><td>${e.date?esc(e.date)+(e.by?` <span style="color:var(--gray)">· ${esc(e.by)}</span>`:""):'<span style="color:var(--gray)">—</span>'}</td><td><button class="btn ghost mgr-vf-mark" data-term="${esc(t.t)}" style="padding:5px 10px;font-size:9px">Verify</button></td></tr>`;
+  }).join(""):`<tr><td colspan="6" style="text-align:center;font-style:italic;color:var(--gray)">${vfShowAll?"No terms flagged for verification.":"All flagged terms are currently fresh — nothing in the queue."}</td></tr>`;
   el.innerHTML=`
     <div class="eyebrow">Manager Dashboard &middot; Local Roll-Up</div>
     <h2 class="h-sec">${esc(state.name||"This Device")}${state.role?` &mdash; ${esc(state.role)}`:""}</h2>
@@ -2363,6 +2451,26 @@ RENDER.manager=function(){
       <thead><tr><th>Date</th><th>Level</th><th class="num">Score</th><th>Result</th></tr></thead>
       <tbody>${certRows}</tbody>
     </table>
+    <h3 class="statline" style="margin-top:24px">Term Verification Queue</h3>
+    <p style="font-family:'Cormorant Garamond',serif;font-size:15px;color:var(--gray);margin-bottom:12px">${vfTerms.length} terms are flagged as time-sensitive (ASTM revisions, manufacturer renames, code thresholds). Re-check the spec annually; this queue tracks the ${VF_STALE_DAYS}-day cadence. <span style="color:var(--good)">Fresh: ${vfCounts.fresh}</span> &middot; <span style="color:var(--red)">Stale: ${vfCounts.stale}</span> &middot; <span style="color:var(--gold)">Never: ${vfCounts.never}</span></p>
+    <div class="btnrow" style="margin-bottom:11px">
+      <button class="btn ${vfShowAll?"":"solid"}" id="mgrVfToggle">${vfShowAll?"Show queue only":"Show all flagged terms"}</button>
+      <button class="btn" id="mgrVfMarkAll" ${vfVisible.length===0?"disabled":""}>Mark all visible verified today</button>
+    </div>
+    <table class="mgr-table">
+      <thead><tr><th>Term</th><th>Group</th><th class="num">Tier</th><th>Status</th><th>Last Verified</th><th></th></tr></thead>
+      <tbody>${vfRows}</tbody>
+    </table>
+    <h3 class="statline" style="margin-top:24px">Team Roll-Up (Import)</h3>
+    <p style="font-family:'Cormorant Garamond',serif;font-size:15px;color:var(--gray);margin-bottom:12px">${(()=>{const team=teamRead();const localCerts=(state.certs||[]).length;const tot=teamCombinedCerts().length;return team.length?`${team.length} device${team.length===1?"":"s"} imported · ${tot} combined cert run${tot===1?"":"s"} (${localCerts} from this device).`:`Each device exports its progress via "Download Full Progress JSON". Import those files here to build a team roll-up. Stays on this device — no server required.`;})()}</p>
+    <div class="btnrow" style="margin-bottom:11px">
+      <label class="btn solid" for="mgrTeamFile" style="cursor:pointer">Import JSON</label>
+      <input id="mgrTeamFile" type="file" accept="application/json,.json" multiple style="display:none">
+      <button class="btn ghost" id="mgrTeamClear" ${teamRead().length===0?"disabled":""}>Clear All Imports</button>
+    </div>
+    <div id="mgrTeamMsg" style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.08em;color:var(--gray);margin-bottom:11px;min-height:14px"></div>
+    ${(()=>{const team=teamRead();if(team.length===0)return"";return`<table class="mgr-table"><thead><tr><th>Device / Staff</th><th>Role</th><th>Location</th><th>Imported</th><th></th></tr></thead><tbody>${team.map(d=>`<tr><td>${esc(d.name)}</td><td>${esc(d.role||"—")}</td><td>${esc(d.location||"—")}</td><td>${esc(d.importedAt.slice(0,16).replace("T"," "))}</td><td><button class="btn ghost mgr-team-rm" data-id="${esc(d.id)}" style="padding:5px 10px;font-size:9px">Remove</button></td></tr>`).join("")}</tbody></table>`;})()}
+    ${(()=>{const rows=teamCombinedCerts();if(rows.length===0)return"";return`<h4 style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--gray);margin-top:18px;margin-bottom:8px">Combined Certifications</h4><table class="mgr-table"><thead><tr><th>Staff</th><th>Role</th><th>Date</th><th>Level</th><th class="num">Score</th><th>Result</th><th>Source</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(r.staff)}</td><td>${esc(r.role||"—")}</td><td>${esc(r.at)}</td><td>${r.level?("L"+r.level+(r.levelName?" — "+esc(r.levelName):"")):"—"}</td><td class="num">${r.score}%</td><td>${r.pass?'<span style="color:var(--good)">Passed</span>':'<span style="color:var(--red)">Not yet</span>'}</td><td style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--gray)">${r.src==="local"?"this device":"imported"}</td></tr>`).join("")}</tbody></table>`;})()}
     <h3 class="statline" style="margin-top:24px">Reports &amp; Transfer</h3>
     <div class="io-row">
       <button class="btn solid" id="mgrCsv">Download Summary CSV</button>
@@ -2403,6 +2511,42 @@ RENDER.manager=function(){
       <div id="mgrSettingsMsg" style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.1em;color:var(--gray);margin-top:10px"></div>
       <p style="font-family:'Cormorant Garamond',serif;font-style:italic;font-size:14px;color:var(--gray);margin-top:14px">This passcode is a soft gate for shared-device courtesy; it is not a security control. For audited, multi-user, server-side tracking, fill in the Sync Settings above.</p>
     </div>`;
+  document.querySelectorAll(".mgr-vf-mark").forEach(b=>b.addEventListener("click",()=>{
+    markVerified(b.dataset.term);RENDER.manager();
+  }));
+  const teamMsg=(t,ok)=>{const el=document.getElementById("mgrTeamMsg");if(!el)return;el.textContent=t;el.style.color=ok===true?"var(--good)":(ok===false?"var(--red)":"var(--gray)");};
+  const teamFile=document.getElementById("mgrTeamFile");
+  if(teamFile)teamFile.addEventListener("change",async(e)=>{
+    const files=Array.from(e.target.files||[]);
+    if(files.length===0)return;
+    let ok=0,fail=0;const errs=[];
+    for(const f of files){
+      try{
+        const txt=await f.text();
+        const r=teamImport(txt);
+        if(r.ok)ok++;else{fail++;errs.push(f.name+": "+r.msg);}
+      }catch(err){fail++;errs.push(f.name+": "+(err&&err.message||err));}
+    }
+    e.target.value="";
+    teamMsg(ok?`Imported ${ok} device${ok===1?"":"s"}${fail?` · ${fail} skipped (${errs[0]||""})`:""}.`:`Could not import: ${errs[0]||"unknown error"}`,ok>0);
+    RENDER.manager();
+  });
+  document.querySelectorAll(".mgr-team-rm").forEach(b=>b.addEventListener("click",()=>{
+    teamRemove(b.dataset.id);RENDER.manager();
+  }));
+  const teamClearBtn=document.getElementById("mgrTeamClear");
+  if(teamClearBtn)teamClearBtn.addEventListener("click",()=>{
+    if(teamRead().length===0)return;
+    teamClear();RENDER.manager();
+  });
+  const vfToggle=document.getElementById("mgrVfToggle");
+  if(vfToggle)vfToggle.addEventListener("click",()=>{state.mgrVfShowAll=!state.mgrVfShowAll;saveState();RENDER.manager();});
+  const vfMarkAll=document.getElementById("mgrVfMarkAll");
+  if(vfMarkAll)vfMarkAll.addEventListener("click",()=>{
+    vfVisible.forEach(t=>markVerified(t.t));
+    track("Verification Bulk Marked",{count:vfVisible.length});
+    RENDER.manager();
+  });
   document.getElementById("mgrCsv").addEventListener("click",()=>{
     const blob=new Blob([buildSummaryCsv()],{type:"text/csv"});
     const a=document.createElement("a");a.href=URL.createObjectURL(blob);
@@ -2548,7 +2692,10 @@ window.__crl = {
   TERMS, CATS, LEVELS, SCENARIOS, COMPAT, TEST_CUT_STEPS, HAIL_THRESHOLDS,
   buildCert, sbParseAnonKey, sbCleanKey,
   outboxPush, outboxRead, outboxFlush, outboxPending,
-  OUTBOX_KEY, sbInsert, sbCfg
+  OUTBOX_KEY, sbInsert, sbCfg,
+  vfStatus, markVerified, unmarkVerified, VF_STALE_DAYS,
+  get vfState(){return state.vf||{};},
+  teamRead, teamImport, teamRemove, teamClear, teamCombinedCerts, TEAM_KEY
 };
 
 /* ===== PWA INSTALL — capture the install prompt for the Profile button ===== */
