@@ -14,14 +14,15 @@ A single-file static web app: a branded training + certification platform ("The 
 
 The app has three certification levels: L1 Apprentice (80%, tier-1 vocab, 16 Q), L2 Field Roofing Professional (85%, tier 1–2, 20 Q), L3 Claims & Forensics Specialist (90%, all tiers including forensic, 22 Q). When a user sets a role in Profile, the Overview shows a 5-step recommended path tuned to that role with deep-links into the right module + pre-filter.
 
-Deployment: GitHub push → Zeabur auto-detects as a static site and redeploys `index.html` at the placeholder domain `lexicon.justennewton.media`. External runtime deps: Google Fonts and `qrious` from cdnjs (both have graceful fallbacks); Plausible analytics is wired in `<head>`.
+Deployment: GitHub push → Zeabur builds from the repo's `Dockerfile` (nginx:alpine that explicitly `COPY`s only the 7 shell files into `/usr/share/nginx/html/`) and redeploys at `lexicon.justennewton.media`. The Dockerfile is the deploy allowlist — anything not named in its `COPY` line will not ship to production, even if it's at repo root. External runtime deps: Google Fonts and `qrious` from cdnjs (both have graceful fallbacks); Plausible analytics is wired in `<head>`.
 
 ## How to run / iterate
 
 - **Preview:** open `index.html` directly in a browser, or `python -m http.server 8000` from the repo root and visit `localhost:8000`. There is no dev server, no hot reload, no linter for the app itself.
 - **Test:** `npm install` (one time), then `npm test` to run the full Playwright suite (28 specs, ~30 s). `npm run test:ui` opens the Playwright UI; `npm run test:headed` shows the browser. Tests serve the repo root over `http-server` on port 8765 — same fixture you'd open manually.
-- **Deploy:** `git push`. Zeabur handles the rest. No Dockerfile, no config file.
-- **No build step exists for the app. Do not add one** (see hard rule §3.2 in the handoff). `package.json` is test-only and explicitly declares `"private": true`.
+- **Deploy:** `git push`. Zeabur builds the repo's `Dockerfile` (nginx:alpine + an explicit `COPY` of the 7 shell files). To add a new public asset, append the filename to the `COPY` line in `Dockerfile` — no other action ships a file to prod.
+- **No build step exists for the app. Do not add one** (see hard rule §3.2 in the handoff). `package.json` is test-only and explicitly declares `"private": true`. The Dockerfile is not a "build step" in the spirit of that rule — nothing is compiled, transpiled, or bundled; it's a copy-into-an-nginx-image.
+- **Why a custom Dockerfile, not `zbpack.json`:** Zeabur's no-build static plan does `COPY . /` regardless of `output_dir` settings, and its "pre-processing" step rewrites Dockerfiles that `FROM zeabur/caddy-static`. A vanilla `nginx:alpine` base is the only path that gives a real allowlist. See `HANDOFF-2026-05-25.md` §5 for the full debug.
 - **Regenerate PWA icons** if the brand colors or seal letterforms change: `node tools/generate-icons.js`. Outputs `icon-192.png`, `icon-512.png`, `icon-maskable.png` to repo root.
 
 ## Architecture inside `index.html`
@@ -61,7 +62,7 @@ Editorial-forensic, not salesy. Fonts: Playfair Display, Cormorant Garamond, Jet
 - **Server:** `server-69c6266d726b928734624537` (Hetzner 007Server)
 - **GitHub repo:** `SlopesGuru77/complete-roofing-lexicon` (public)
 - **GitHub repo numeric ID:** `1243057448`
-- **Deploy template:** GIT — Zeabur auto-redeploys on every push to `main`.
+- **Deploy template:** GIT — Zeabur auto-redeploys on every push to `main`. Build uses the repo's `Dockerfile` (nginx:alpine, port 8080, explicit shell allowlist). `zbpack.json` was removed 2026-05-26 — with a Dockerfile present, plan inference is unnecessary and was actually harmful (the `plan_type: static` hint was triggering a Dockerfile-substitution pre-processor).
 - **Dashboard:** https://zeabur.com/projects/6a0bec24c08ad7fb8a7dbb3a
 
 To check build/runtime logs use the `zeabur-deployment-logs` skill. To redeploy via CLI (rarely needed since Git-deploy auto-redeploys on push):
@@ -84,6 +85,7 @@ npx zeabur@latest deploy --project-id 6a0bec24c08ad7fb8a7dbb3a --service-id 6a0b
 10. ~~Lazy-load supabase-js + qrious; preconnect fonts.~~ **Done 2026-05-23** (commit `0b2ecc8`).
 11. ~~`vf` term verification workflow with annual cadence + manager queue.~~ **Done 2026-05-23** — `state.vf={[termKey]:{date,by}}`, 365-day freshness window via `VF_STALE_DAYS`, dynamic Lexicon badge (`Verify Current Spec` / `Verified YYYY-MM` / `Verification Stale`), Manager → Term Verification Queue panel with per-row + bulk verify. Exposed `vfStatus`, `markVerified`, `unmarkVerified`, `VF_STALE_DAYS`, `vfState` on `window.__crl`. New spec: `tests/term-verification.spec.js` (6 tests, all green).
 12. ~~Team roll-up (offline / JSON-import path).~~ **Done 2026-05-23** — `crl_team_v1` localStorage holds imported per-device snapshots; `teamImport`/`teamRead`/`teamRemove`/`teamClear`/`teamCombinedCerts` helpers. Manager → "Team Roll-Up (Import)" section: multi-file JSON upload, imported-devices table with Remove, Combined Certifications table (local + imports, sorted by date). Dedupe by `name|role|location`. Decision context: supabase-setup.sql intentionally does **not** grant SELECT to anon (write-only schema), so a Supabase READ path requires a schema change. The JSON-import flow ships team value without that dependency and is forward-compatible. New spec: `tests/team-import.spec.js` (7 tests).
+13. ~~Static deploy root exposed non-shell files (`tests/`, `CLAUDE.md`, `HANDOFF-*.md`, `package.json`, `supabase-setup.sql`).~~ **Done 2026-05-26** (commit `c6acb52`) — replaced Zeabur's auto-generated `COPY . /` static plan with a custom `Dockerfile` (`nginx:alpine` + explicit `COPY` of the 7 shell files), removed `zbpack.json`. Live host now `Server: nginx/1.31.1`, returns 200 for the 7 shell files and 404 for everything else. See `HANDOFF-2026-05-25.md` §3-5 for the full debug.
 
 **Still open** (queued for Phase 2 of the review plan):
 
