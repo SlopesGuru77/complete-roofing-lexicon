@@ -1,5 +1,0 @@
-{
-  "$schema": "https://schema.zeabur.app/zbpack.json",
-  "plan_type": "static",
-  "output_dir": "."
-}
