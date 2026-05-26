@@ -1,13 +1,14 @@
 // Generates the PWA icons by rasterizing an HTML rendering of the JN seal
 // at three target sizes. Run via:  node tools/generate-icons.js
 // Requires the dev dependency `@playwright/test` (which pulls in playwright).
-// Output files are committed to the repo root and referenced from manifest.json.
+// Output files are committed to ./public/ (the static deploy root) and
+// referenced from public/manifest.json.
 
 const { chromium } = require('playwright');
 const path = require('path');
 const fs = require('fs');
 
-const REPO = path.resolve(__dirname, '..');
+const REPO = path.resolve(__dirname, '..', 'public');
 
 function sealHtml({ size, scale = 0.55, includeOrnaments = true }) {
   // scale = JN letter size / canvas size. 0.55 fits the JN cleanly within

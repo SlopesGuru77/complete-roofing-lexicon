@@ -1,8 +1,10 @@
 // @ts-check
 const { defineConfig, devices } = require('@playwright/test');
 
-// Test harness for the single-file static app. Serves the repo root over
-// http-server on port 8765 and runs specs from ./tests against it.
+// Test harness for the single-file static app. Serves the deploy shell
+// (./public) over http-server on port 8765 and runs specs from ./tests
+// against it. Keeping the served root in lockstep with what Zeabur ships
+// guarantees the test surface == the production surface.
 module.exports = defineConfig({
   testDir: './tests',
   fullyParallel: true,
@@ -20,7 +22,7 @@ module.exports = defineConfig({
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } }
   ],
   webServer: {
-    command: 'npx http-server . -p 8765 -s -c-1',
+    command: 'npx http-server ./public -p 8765 -s -c-1',
     url: 'http://localhost:8765',
     reuseExistingServer: !process.env.CI,
     timeout: 30_000
