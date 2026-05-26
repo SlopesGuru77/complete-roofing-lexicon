@@ -10,9 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A single-file static web app: a branded training + certification platform ("The Complete Roofing Lexicon") for Justen Newton Media — covering commercial, residential, hail forensics (dedicated module with threshold reference + 9-step test-cut protocol), insurance restoration, claims vocabulary, plain-English translation drills, pro-grade report-language coaching, and role-based recommended curricula. Everything — HTML, CSS, all JS, all data — lives in `index.html` (~2,500 lines).
 
-**Test harness, but no build.** As of 2026-05-23 the repo has a `package.json` + `playwright.config.js` + `tests/` for an automated test suite (41 specs). The app itself is still buildless — `package.json` exists only to install Playwright and a static file server. There is no transpilation, no bundling, no dev server for the app.
-
-**Deploy shell lives in `public/`** (as of 2026-05-25). Zeabur serves only `./public` (`zbpack.json` → `output_dir: "public"`), and the test server (`npm run serve`, plus the Playwright web-server) is pointed at the same dir — keeping the test surface identical to the production surface. The shell is just seven files: `index.html`, `sw.js`, `manifest.json`, `og-cover.png`, and the three PNG icons. Everything else in the repo (`tests/`, `tools/`, `node_modules/`, docs, handoffs, the source-material PDFs, the supabase schema, log files) stays at repo root and is never served.
+**Test harness, but no build.** As of 2026-05-23 the repo has a `package.json` + `playwright.config.js` + `tests/` for an automated test suite (28 specs). The app itself is still buildless — `package.json` exists only to install Playwright and a static file server. There is no transpilation, no bundling, no dev server for the app. The PWA layer adds `manifest.json`, `sw.js`, and three PNG icons in the repo root.
 
 The app has three certification levels: L1 Apprentice (80%, tier-1 vocab, 16 Q), L2 Field Roofing Professional (85%, tier 1–2, 20 Q), L3 Claims & Forensics Specialist (90%, all tiers including forensic, 22 Q). When a user sets a role in Profile, the Overview shows a 5-step recommended path tuned to that role with deep-links into the right module + pre-filter.
 
@@ -20,11 +18,11 @@ Deployment: GitHub push → Zeabur auto-detects as a static site and redeploys `
 
 ## How to run / iterate
 
-- **Preview:** open `public/index.html` directly in a browser, or `npm run serve` (http-server on port 8765 against `./public`) and visit `localhost:8765`. There is no dev server, no hot reload, no linter for the app itself.
-- **Test:** `npm install` (one time), then `npm test` to run the full Playwright suite (41 specs, ~25 s). `npm run test:ui` opens the Playwright UI; `npm run test:headed` shows the browser. Tests serve `./public` over `http-server` on port 8765 — same fixture you'd open manually.
-- **Deploy:** `git push`. Zeabur reads `zbpack.json` (`plan_type: static, output_dir: public`) and serves only the shell. No Dockerfile.
-- **No build step exists for the app. Do not add one** (see hard rule §3.2 in the handoff). `package.json` is test-only and explicitly declares `"private": true`. Moving files in or out of `public/` is fine; running a transform on them isn't.
-- **Regenerate PWA icons** if the brand colors or seal letterforms change: `node tools/generate-icons.js`. Outputs `icon-192.png`, `icon-512.png`, `icon-maskable.png` to `./public/`.
+- **Preview:** open `index.html` directly in a browser, or `python -m http.server 8000` from the repo root and visit `localhost:8000`. There is no dev server, no hot reload, no linter for the app itself.
+- **Test:** `npm install` (one time), then `npm test` to run the full Playwright suite (28 specs, ~30 s). `npm run test:ui` opens the Playwright UI; `npm run test:headed` shows the browser. Tests serve the repo root over `http-server` on port 8765 — same fixture you'd open manually.
+- **Deploy:** `git push`. Zeabur handles the rest. No Dockerfile, no config file.
+- **No build step exists for the app. Do not add one** (see hard rule §3.2 in the handoff). `package.json` is test-only and explicitly declares `"private": true`.
+- **Regenerate PWA icons** if the brand colors or seal letterforms change: `node tools/generate-icons.js`. Outputs `icon-192.png`, `icon-512.png`, `icon-maskable.png` to repo root.
 
 ## Architecture inside `index.html`
 

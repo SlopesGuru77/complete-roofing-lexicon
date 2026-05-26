@@ -1,7 +1,7 @@
 // The Complete Roofing Lexicon — service worker.
 // Bump VERSION any time the cached shell changes (HTML, icons, og-cover, manifest).
 // Old caches are deleted on activate.
-const VERSION = 'crl-2026-05-25-1';
+const VERSION = 'crl-2026-05-23-3';
 
 const SHELL = [
   '/',
